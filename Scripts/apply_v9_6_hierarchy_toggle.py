@@ -76,5 +76,12 @@ if old not in s:
     raise SystemExit("V9.6 marker: native hierarchy route not found")
 s = s.replace(old, new, 1)
 
+# Declare the private helper so the implementation compiles without an undeclared-selector warning.
+old = '- (void)showSelectedWebElement:(NSString *)details;\n@end'
+new = '- (void)showSelectedWebElement:(NSString *)details;\n- (void)showHierarchyDetails:(NSString *)details;\n@end'
+if old not in s:
+    raise SystemExit("V9.6 marker: inspector interface declaration not found")
+s = s.replace(old, new, 1)
+
 path.write_text(s, encoding="utf-8")
 print("Applied V9.6 hierarchy toggle")
