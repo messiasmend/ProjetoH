@@ -1,4 +1,4 @@
-name: Build ProjetoH V5
+name: Build ProjetoH V6
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V5 dylib
+      - name: Collect and validate standalone V6 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -55,15 +55,15 @@ jobs:
             echo "Found candidate files, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V5.dylib
-          echo '--- Final ProjetoH V5 ---'
-          file artifacts/ProjetoH-V5.dylib
-          file -b artifacts/ProjetoH-V5.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V6.dylib
+          echo '--- Final ProjetoH V6 ---'
+          file artifacts/ProjetoH-V6.dylib
+          file -b artifacts/ProjetoH-V6.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V5 dylib
+      - name: Upload ProjetoH V6 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V5-dylib
-          path: artifacts/ProjetoH-V5.dylib
+          name: ProjetoH-V6-dylib
+          path: artifacts/ProjetoH-V6.dylib
           if-no-files-found: error
