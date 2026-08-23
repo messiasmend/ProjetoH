@@ -1,4 +1,4 @@
-name: Build ProjetoH
+name: Build ProjetoH V2
 
 on:
   push:
@@ -26,29 +26,49 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Build ProjetoH dylib
-        run: |
-          make clean
-          make FINALPACKAGE=1
-
-      - name: Collect dylib
-        shell: bash
+      - name: Build package and dylib
         run: |
           set -e
+          make clean package FINALPACKAGE=1
+
+      - name: Collect the actual staged dylib
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p artifacts
-          DYLIB="$(find .theos -type f -name 'ProjetoH.dylib' | head -n 1)"
-          if [ -z "$DYLIB" ]; then
-            echo "ProjetoH.dylib not found"
-            find .theos -type f | sort | tail -n 100
+
+          CANDIDATES=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' -print)
+          if [ -z "$CANDIDATES" ]; then
+            echo "No staged ProjetoH.dylib found."
+            find .theos -type f | sort | tail -n 200
             exit 1
           fi
-          cp "$DYLIB" "artifacts/ProjetoH.dylib"
-          file "artifacts/ProjetoH.dylib"
+
+          DYLIB=""
+          while IFS= read -r candidate; do
+            description=$(file -b "$candidate")
+            echo "$candidate -> $description"
+            if echo "$description" | grep -q 'dynamically linked shared library'; then
+              DYLIB="$candidate"
+              break
+            fi
+          done <<< "$CANDIDATES"
+
+          if [ -z "$DYLIB" ]; then
+            echo "Found candidate files, but none is a real Mach-O DYLIB."
+            exit 1
+          fi
+
+          cp "$DYLIB" artifacts/ProjetoH-V2.dylib
+
+          echo '--- Final standalone dylib ---'
+          file artifacts/ProjetoH-V2.dylib
+          test "$(file -b artifacts/ProjetoH-V2.dylib | grep -c 'dynamically linked shared library')" -eq 1
           ls -lah artifacts
 
-      - name: Upload dylib
+      - name: Upload ProjetoH V2 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-dylib
-          path: artifacts/ProjetoH.dylib
+          name: ProjetoH-V2-dylib
+          path: artifacts/ProjetoH-V2.dylib
           if-no-files-found: error
