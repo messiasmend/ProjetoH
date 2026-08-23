@@ -2,6 +2,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+// ProjetoH V9: inspector overlay API.
 @interface PHOverlayManager : NSObject
 
 + (instancetype)sharedManager;
