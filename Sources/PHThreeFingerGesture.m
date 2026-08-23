@@ -1,8 +1,9 @@
 #import "PHThreeFingerGesture.h"
 #import "PHOverlayManager.h"
 
+// ProjetoH V6: the GUI is activated with exactly two fingers.
 static const NSUInteger PHRequiredFingerCount = 2;
-static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
+static NSTimeInterval const PHTwoFingerHoldInterval = 0.8;
 
 @interface PHThreeFingerGesture ()
 @property (nonatomic, strong, nullable) NSTimer *holdTimer;
@@ -26,7 +27,9 @@ static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
                 break;
         }
     }
-    if (activeTouches >= PHRequiredFingerCount) [self armIfNeeded];
+
+    // Exactly two active fingers are required. Three or more do not activate it.
+    if (activeTouches == PHRequiredFingerCount) [self armIfNeeded];
     else [self cancelHoldAndResetTrigger];
 }
 
@@ -34,7 +37,7 @@ static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
     if (self.triggered || self.holdTimer != nil) return;
     if (![NSThread isMainThread]) { dispatch_async(dispatch_get_main_queue(), ^{ [self armIfNeeded]; }); return; }
     __weak typeof(self) weakSelf = self;
-    self.holdTimer = [NSTimer timerWithTimeInterval:PHThreeFingerHoldInterval repeats:NO block:^(__unused NSTimer *timer) {
+    self.holdTimer = [NSTimer timerWithTimeInterval:PHTwoFingerHoldInterval repeats:NO block:^(__unused NSTimer *timer) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         [strongSelf handleHoldTimerFired];
     }];
