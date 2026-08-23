@@ -6,6 +6,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)sharedManager;
 - (void)presentTestOverlayIfNeeded;
+- (void)presentInspectorIfNeeded;
 - (void)dismissOverlay;
 
 @end
