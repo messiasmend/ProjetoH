@@ -2,7 +2,6 @@
 #import <objc/runtime.h>
 #import "Sources/PHThreeFingerGesture.h"
 #import "Sources/PHOverlayManager.h"
-#import "Sources/PHPreciseSelector.h"
 
 static PHThreeFingerGesture *PHGestureDetector(void) {
     static PHThreeFingerGesture *detector;
@@ -14,26 +13,26 @@ static PHThreeFingerGesture *PHGestureDetector(void) {
 static void (*PHOriginalUIApplicationSendEvent)(id, SEL, UIEvent *);
 static void (*PHOriginalUIWindowSendEvent)(id, SEL, UIEvent *);
 
-static void PHProcessEventBeforeOriginal(UIEvent *event) {
+static void PHProcessInspectionEvent(UIEvent *event) {
     if (event == nil) return;
-    [[PHPreciseSelector sharedSelector] processEvent:event inspectorWindow:nil];
+    [[PHOverlayManager sharedManager] processInspectionEvent:event];
 }
 
-static void PHProcessEventAfterOriginal(UIEvent *event) {
+static void PHProcessGestureEvent(UIEvent *event) {
     if (event == nil) return;
     [PHGestureDetector() processEvent:event];
 }
 
 static void PHUIApplicationSendEvent(id self, SEL _cmd, UIEvent *event) {
-    PHProcessEventBeforeOriginal(event);
+    PHProcessInspectionEvent(event);
     if (PHOriginalUIApplicationSendEvent != NULL) PHOriginalUIApplicationSendEvent(self, _cmd, event);
-    PHProcessEventAfterOriginal(event);
+    PHProcessGestureEvent(event);
 }
 
 static void PHUIWindowSendEvent(id self, SEL _cmd, UIEvent *event) {
-    PHProcessEventBeforeOriginal(event);
+    PHProcessInspectionEvent(event);
     if (PHOriginalUIWindowSendEvent != NULL) PHOriginalUIWindowSendEvent(self, _cmd, event);
-    PHProcessEventAfterOriginal(event);
+    PHProcessGestureEvent(event);
 }
 
 static BOOL PHInstallHook(Class cls, SEL selector, IMP replacement, void (**originalStorage)(id, SEL, UIEvent *)) {
@@ -61,7 +60,7 @@ static void PHInstallSendEventHooks(void) {
 %ctor {
     @autoreleasepool {
         PHGestureDetector();
-        [PHPreciseSelector sharedSelector];
+        [PHOverlayManager sharedManager];
         dispatch_async(dispatch_get_main_queue(), ^{ PHInstallSendEventHooks(); });
     }
 }
