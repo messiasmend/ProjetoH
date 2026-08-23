@@ -1,4 +1,4 @@
-name: Build ProjetoH V9.7
+name: Build ProjetoH V9.8
 
 on:
   push:
@@ -23,22 +23,28 @@ jobs:
           theos-branch: master
           sdks-src: theos/sdks
           sdks-branch: master
-      - name: Validate V9.7 source
+      - name: Apply V9.8 save/gui/persistence patch
+        run: |
+          set -euo pipefail
+          python3 Scripts/apply_v9_8_save_gui_persistence.py
+      - name: Validate V9.8 source
         run: |
           set -euo pipefail
           grep -q 'Ocultar' Sources/PHOverlayManager.m
           grep -q 'Ocultos' Sources/PHOverlayManager.m
           grep -q 'Salvar' Sources/PHOverlayManager.m
           grep -q 'PHPendingSelectors' Sources/PHOverlayManager.m
+          grep -q 'ProjetoH.PersistentFilters' Sources/PHOverlayManager.m
           grep -q 'showHierarchy' Sources/PHOverlayManager.m
           grep -q 'restoreInspector' Sources/PHOverlayManager.m
           grep -q 'custom-filters.json' Sources/PHOverlayManager.m
+          grep -q 'heightAnchor constraintEqualToConstant:560' Sources/PHOverlayManager.m
           ! grep -q 'PHCustomFiltersManager.m' Makefile
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
-      - name: Collect and validate standalone V9.7 dylib
+      - name: Collect and validate standalone V9.8 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -52,13 +58,13 @@ jobs:
             if echo "$description" | grep -q 'dynamically linked shared library'; then DYLIB="$candidate"; break; fi
           done <<< "$CANDIDATES"
           test -n "$DYLIB"
-          cp "$DYLIB" artifacts/ProjetoH-V9.7.dylib
-          file artifacts/ProjetoH-V9.7.dylib
-          file -b artifacts/ProjetoH-V9.7.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V9.8.dylib
+          file artifacts/ProjetoH-V9.8.dylib
+          file -b artifacts/ProjetoH-V9.8.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
-      - name: Upload ProjetoH V9.7 dylib
+      - name: Upload ProjetoH V9.8 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V9.7-dylib
-          path: artifacts/ProjetoH-V9.7.dylib
+          name: ProjetoH-V9.8-dylib
+          path: artifacts/ProjetoH-V9.8.dylib
           if-no-files-found: error
