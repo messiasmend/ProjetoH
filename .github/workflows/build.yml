@@ -26,6 +26,11 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
+      - name: Apply V9.1 scrollable inspector layout
+        run: |
+          set -euo pipefail
+          python3 Scripts/apply_v9_scroll_layout.py
+
       - name: Build package and dylib
         run: |
           set -euo pipefail
@@ -68,4 +73,4 @@ jobs:
           path: artifacts/ProjetoH-V9.dylib
           if-no-files-found: error
 
-# V9: build the already-patched inspector directly; no source patch step is required.
+# V9.1: inspector details are displayed inside a fixed-height UIScrollView so long DOM results cannot push the buttons out of the panel.
