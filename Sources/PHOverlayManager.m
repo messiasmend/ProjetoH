@@ -1,4 +1,5 @@
 #import "PHOverlayManager.h"
+#import <WebKit/WebKit.h>
 
 @interface PHInspectorViewController : UIViewController
 @property (nonatomic, assign) BOOL selectionMode;
@@ -7,6 +8,7 @@
 + (NSString *)descriptionForView:(UIView *)view;
 - (void)showSelectionPrompt;
 - (void)showSelectedView:(UIView *)view;
+- (void)showSelectedWebElement:(NSString *)details;
 @end
 
 @interface PHOverlayManager ()
@@ -15,6 +17,7 @@
 @property (nonatomic, strong, nullable) UIWindow *inspectorWindow;
 @property (nonatomic, assign) BOOL selectionModeActive;
 @property (nonatomic, weak, nullable) UIView *highlightedView;
+@property (nonatomic, weak, nullable) WKWebView *highlightedWebView;
 @property (nonatomic, assign) CGFloat previousBorderWidth;
 @property (nonatomic, strong, nullable) UIColor *previousBorderColor;
 @end
@@ -80,34 +83,53 @@
     });
 }
 
-- (void)showSelectedView:(UIView *)view {
+- (void)showPanelWithSubtitle:(NSString *)subtitle details:(NSString *)details {
     dispatch_async(dispatch_get_main_queue(), ^{
         self.selectionMode = NO;
         [self clearSubviews];
         UIView *panel = [self makePanel];
         UILabel *title = [self labelWithText:@"ProjetoH Inspector" font:[UIFont boldSystemFontOfSize:21.0] color:UIColor.whiteColor];
-        UILabel *subtitle = [self labelWithText:@"Elemento selecionado" font:[UIFont systemFontOfSize:14.0] color:[UIColor colorWithWhite:0.72 alpha:1.0]];
-        NSString *text = [PHInspectorViewController descriptionForView:view];
-        UILabel *details = [self labelWithText:text font:[UIFont monospacedSystemFontOfSize:13.0 weight:UIFontWeightRegular] color:[UIColor colorWithWhite:0.86 alpha:1.0]];
+        UILabel *subtitleLabel = [self labelWithText:subtitle font:[UIFont systemFontOfSize:14.0] color:[UIColor colorWithWhite:0.72 alpha:1.0]];
+        UILabel *detailsLabel = [self labelWithText:details font:[UIFont monospacedSystemFontOfSize:13.0 weight:UIFontWeightRegular] color:[UIColor colorWithWhite:0.86 alpha:1.0]];
         UIButton *close = [self makeCloseButton];
         UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];
         hierarchy.translatesAutoresizingMaskIntoConstraints = NO;
         [hierarchy setTitle:@"Hierarquia" forState:UIControlStateNormal];
         hierarchy.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
-        [panel addSubview:title]; [panel addSubview:subtitle]; [panel addSubview:details]; [panel addSubview:hierarchy]; [panel addSubview:close]; [self.view addSubview:panel];
+        [panel addSubview:title];
+        [panel addSubview:subtitleLabel];
+        [panel addSubview:detailsLabel];
+        [panel addSubview:hierarchy];
+        [panel addSubview:close];
+        [self.view addSubview:panel];
         [NSLayoutConstraint activateConstraints:@[
             [panel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
             [panel.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
             [panel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:12.0],
             [panel.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-12.0],
-            [panel.widthAnchor constraintEqualToConstant:350.0], [panel.heightAnchor constraintEqualToConstant:430.0],
-            [title.topAnchor constraintEqualToAnchor:panel.topAnchor constant:22.0], [title.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
-            [subtitle.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:5.0], [subtitle.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
-            [details.topAnchor constraintEqualToAnchor:subtitle.bottomAnchor constant:20.0], [details.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0], [details.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],
-            [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0], [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],
-            [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0], [close.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0]
+            [panel.widthAnchor constraintEqualToConstant:350.0],
+            [panel.heightAnchor constraintEqualToConstant:430.0],
+            [title.topAnchor constraintEqualToAnchor:panel.topAnchor constant:22.0],
+            [title.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
+            [subtitleLabel.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:5.0],
+            [subtitleLabel.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
+            [detailsLabel.topAnchor constraintEqualToAnchor:subtitleLabel.bottomAnchor constant:20.0],
+            [detailsLabel.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
+            [detailsLabel.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],
+            [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
+            [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],
+            [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],
+            [close.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0]
         ]];
     });
+}
+
+- (void)showSelectedView:(UIView *)view {
+    [self showPanelWithSubtitle:@"Elemento nativo selecionado" details:[PHInspectorViewController descriptionForView:view]];
+}
+
+- (void)showSelectedWebElement:(NSString *)details {
+    [self showPanelWithSubtitle:@"Elemento Web selecionado" details:details];
 }
 
 + (NSString *)descriptionForView:(UIView *)view {
@@ -121,7 +143,8 @@
 @implementation PHOverlayManager
 
 + (instancetype)sharedManager {
-    static PHOverlayManager *manager; static dispatch_once_t onceToken;
+    static PHOverlayManager *manager;
+    static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{ manager = [PHOverlayManager new]; });
     return manager;
 }
@@ -164,7 +187,6 @@
     window.backgroundColor = UIColor.clearColor;
     window.rootViewController = controller;
     window.hidden = NO;
-    /* The inspector must never become the hit-test target while selection is active. */
     window.userInteractionEnabled = NO;
     self.inspectorViewController = controller;
     self.inspectorWindow = window;
@@ -182,14 +204,9 @@
     });
 }
 
-/* Recursive selector used instead of UIView hitTest:. hitTest: ignores views
-   that have userInteractionEnabled == NO, which is exactly what happens with
-   many UIImageView/UILabel elements. Inspector selection must still be able
-   to select those visual elements. */
 - (UIView *)deepestViewFrom:(UIView *)view point:(CGPoint)point {
     if (view == nil || view.hidden || view.alpha <= 0.01) return nil;
     if (![view pointInside:point withEvent:nil]) return nil;
-
     for (UIView *subview in view.subviews.reverseObjectEnumerator) {
         CGPoint subPoint = [subview convertPoint:point fromView:view];
         UIView *deepest = [self deepestViewFrom:subview point:subPoint];
@@ -203,9 +220,55 @@
     return [self deepestViewFrom:window point:point];
 }
 
+- (WKWebView *)webViewContainingView:(UIView *)view {
+    UIView *cursor = view;
+    while (cursor != nil) {
+        if ([cursor isKindOfClass:[WKWebView class]]) return (WKWebView *)cursor;
+        cursor = cursor.superview;
+    }
+    return nil;
+}
+
+- (void)highlightWebElementInWebView:(WKWebView *)webView x:(CGFloat)x y:(CGFloat)y {
+    self.highlightedWebView = webView;
+    NSString *script = [NSString stringWithFormat:@"(function(){var e=document.elementFromPoint(%0.3f,%0.3f);if(!e)return null;var old=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(old){old.style.outline=old.getAttribute('data-projetoh-prev-outline')||'';old.removeAttribute('data-projetoh-selected');old.removeAttribute('data-projetoh-prev-outline');}e.setAttribute('data-projetoh-selected','1');e.setAttribute('data-projetoh-prev-outline',e.style.outline||'');e.style.outline='3px solid #007AFF';return JSON.stringify({tag:e.tagName.toLowerCase(),id:e.id||'',className:typeof e.className==='string'?e.className:'',text:(e.innerText||e.textContent||'').trim().replace(/\\s+/g,' ').slice(0,180),href:e.href||'',type:e.getAttribute('type')||'',rect:(function(r){return {x:r.x,y:r.y,width:r.width,height:r.height};})(e.getBoundingClientRect())});})()", x, y];
+    [webView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.selectionModeActive = NO;
+            self.inspectorWindow.userInteractionEnabled = YES;
+            if (error != nil || ![result isKindOfClass:[NSString class]]) {
+                [self selectView:[self deepestViewAtPoint:CGPointMake(x, y) inWindow:webView.window]];
+                return;
+            }
+            NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding];
+            NSDictionary *info = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+            if (![info isKindOfClass:[NSDictionary class]]) {
+                [self selectView:[self deepestViewAtPoint:CGPointMake(x, y) inWindow:webView.window]];
+                return;
+            }
+            NSString *tag = info[@"tag"] ?: @"?";
+            NSString *elementID = info[@"id"] ?: @"";
+            NSString *className = info[@"className"] ?: @"";
+            NSString *text = info[@"text"] ?: @"";
+            NSString *href = info[@"href"] ?: @"";
+            NSString *type = info[@"type"] ?: @"";
+            NSDictionary *rect = info[@"rect"];
+            NSMutableString *details = [NSMutableString stringWithFormat:@"HTML: <%@>", tag];
+            if (elementID.length) [details appendFormat:@"\nID: %@", elementID];
+            if (className.length) [details appendFormat:@"\nClasse: %@", className];
+            if (type.length) [details appendFormat:@"\nTipo: %@", type];
+            if (text.length) [details appendFormat:@"\nTexto: %@", text];
+            if (href.length) [details appendFormat:@"\nLink: %@", href];
+            if ([rect isKindOfClass:[NSDictionary class]]) {
+                [details appendFormat:@"\n\nRect:\n  x: %.1f\n  y: %.1f\n  largura: %.1f\n  altura: %.1f", [rect[@"x"] doubleValue], [rect[@"y"] doubleValue], [rect[@"width"] doubleValue], [rect[@"height"] doubleValue]];
+            }
+            [self.inspectorViewController showSelectedWebElement:details];
+        });
+    }];
+}
+
 - (void)processInspectionEvent:(UIEvent *)event {
     if (!self.selectionModeActive || event == nil || ![event respondsToSelector:@selector(allTouches)]) return;
-
     UITouch *candidate = nil;
     for (UITouch *touch in event.allTouches) {
         if (touch.phase == UITouchPhaseBegan && touch.window != self.inspectorWindow) {
@@ -214,17 +277,36 @@
         }
     }
     if (candidate == nil) return;
-
-    /* Resolve the selection against the real application window. The inspector
-       window is above it but is interaction-disabled during selection. */
     UIWindow *window = candidate.window;
     if (window == nil || window == self.inspectorWindow) return;
-
     CGPoint point = [candidate locationInView:window];
     UIView *selected = [self deepestViewAtPoint:point inWindow:window];
     if (selected == nil) selected = candidate.view;
     if (selected == nil || selected.window == self.inspectorWindow) return;
 
+    WKWebView *webView = [self webViewContainingView:selected];
+    if (webView != nil) {
+        CGPoint webPoint = [webView convertPoint:point fromView:window];
+        CGFloat width = MAX(webView.bounds.size.width, 1.0);
+        CGFloat height = MAX(webView.bounds.size.height, 1.0);
+        NSString *sizeScript = @"JSON.stringify({w:window.innerWidth,h:window.innerHeight})";
+        [webView evaluateJavaScript:sizeScript completionHandler:^(id result, NSError *error) {
+            CGFloat cssWidth = width;
+            CGFloat cssHeight = height;
+            if ([result isKindOfClass:[NSString class]]) {
+                NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding];
+                NSDictionary *size = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+                if ([size isKindOfClass:[NSDictionary class]]) {
+                    cssWidth = MAX([size[@"w"] doubleValue], 1.0);
+                    cssHeight = MAX([size[@"h"] doubleValue], 1.0);
+                }
+            }
+            CGFloat x = webPoint.x * cssWidth / width;
+            CGFloat y = webPoint.y * cssHeight / height;
+            [self highlightWebElementInWebView:webView x:x y:y];
+        }];
+        return;
+    }
     [self selectView:selected];
 }
 
@@ -252,11 +334,15 @@
             self.highlightedView.layer.borderWidth = self.previousBorderWidth;
             self.highlightedView.layer.borderColor = self.previousBorderColor.CGColor;
         }
+        if (self.highlightedWebView != nil) {
+            [self.highlightedWebView evaluateJavaScript:@"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(e){e.style.outline=e.getAttribute('data-projetoh-prev-outline')||'';e.removeAttribute('data-projetoh-selected');e.removeAttribute('data-projetoh-prev-outline');}})();" completionHandler:nil];
+        }
         self.selectionModeActive = NO;
         self.inspectorWindow.hidden = YES;
         self.inspectorWindow = nil;
         self.inspectorViewController = nil;
         self.highlightedView = nil;
+        self.highlightedWebView = nil;
         self.previousBorderColor = nil;
         self.previousBorderWidth = 0.0;
     });
