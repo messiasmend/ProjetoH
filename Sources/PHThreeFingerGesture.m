@@ -70,7 +70,7 @@ static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
     }
 
     self.triggered = YES;
-    [[PHOverlayManager sharedManager] presentInspectorIfNeeded];
+    [[PHOverlayManager sharedManager] startSelectionMode];
 }
 
 - (void)cancelHoldAndResetTrigger {
