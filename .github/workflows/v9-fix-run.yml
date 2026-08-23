@@ -1,0 +1,39 @@
+name: ProjetoH V9 One Shot Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply V9 copy fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('Sources/PHOverlayManager.m')
+          s=p.read_text()
+          if 'currentDetails' in s and 'copyTapped' in s:
+              raise SystemExit(0)
+          s=s.replace('@property (nonatomic, strong, nullable) UIView *highlightView;\n+ (NSString *)descriptionForView:(UIView *)view;', '@property (nonatomic, strong, nullable) UIView *highlightView;\n@property (nonatomic, copy) NSString *currentDetails;\n+ (NSString *)descriptionForView:(UIView *)view;', 1)
+          s=s.replace('        self.selectionMode = NO;\n        [self clearSubviews];\n        UIView *panel = [self makePanel];', '        self.selectionMode = NO;\n        self.currentDetails = details ?: @"";\n        [self clearSubviews];\n        UIView *panel = [self makePanel];', 1)
+          s=s.replace('        UIButton *close = [self makeCloseButton];\n        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];', '        UIButton *copyButton = [UIButton buttonWithType:UIButtonTypeSystem];\n        copyButton.translatesAutoresizingMaskIntoConstraints = NO;\n        [copyButton setTitle:@"Copiar" forState:UIControlStateNormal];\n        copyButton.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];\n        [copyButton addTarget:self action:@selector(copyTapped) forControlEvents:UIControlEventTouchUpInside];\n        UIButton *close = [self makeCloseButton];\n        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];', 1)
+          s=s.replace('        [panel addSubview:detailsLabel];\n        [panel addSubview:hierarchy];\n        [panel addSubview:close];', '        [panel addSubview:detailsLabel];\n        [panel addSubview:hierarchy];\n        [panel addSubview:copyButton];\n        [panel addSubview:close];', 1)
+          s=s.replace('            [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],\n            [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],\n            [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],', '            [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],\n            [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],\n            [copyButton.centerXAnchor constraintEqualToAnchor:panel.centerXAnchor],\n            [copyButton.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],\n            [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],', 1)
+          s=s.replace('- (void)closeTapped { [[PHOverlayManager sharedManager] dismissOverlay]; }', '- (void)copyTapped {\n    UIPasteboard.generalPasteboard.string = self.currentDetails ?: @"";\n}\n\n- (void)closeTapped { [[PHOverlayManager sharedManager] dismissOverlay]; }', 1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Sources/PHOverlayManager.m
+          git commit -m 'ProjetoH V9: fix inspector copy button' || exit 0
+          git push
