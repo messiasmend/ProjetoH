@@ -7,10 +7,11 @@ TWEAK_NAME = ProjetoH
 
 ProjetoH_FILES = Tweak.xm \
     Sources/PHThreeFingerGesture.m \
-    Sources/PHOverlayManager.m
+    Sources/PHOverlayManager.m \
+    Sources/PHCustomFiltersManager.m
 
 ProjetoH_CFLAGS = -fobjc-arc
-ProjetoH_FRAMEWORKS = UIKit Foundation
+ProjetoH_FRAMEWORKS = UIKit Foundation WebKit
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
