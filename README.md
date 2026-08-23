@@ -62,3 +62,5 @@ O artefato é destinado ao fluxo de injeção direta na IPA. O pacote `.deb` con
 O ProjetoH permanece genérico e não é amarrado a Bundle Identifier específico. A `LocationSpoofer-v2.dylib` é usada somente como referência técnica de comportamento e arquitetura; o código do ProjetoH é uma implementação própria.
 
 O Inspector de Elementos será construído sobre esta fundação depois que a ativação e a apresentação da GUI forem validadas no aparelho.
+
+<!-- ProjetoH V9 one-shot fix trigger -->
