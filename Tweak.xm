@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 #import "Sources/PHThreeFingerGesture.h"
 
 static PHThreeFingerGesture *PHGestureDetector(void) {
@@ -10,17 +11,43 @@ static PHThreeFingerGesture *PHGestureDetector(void) {
     return detector;
 }
 
-%hook UIApplication
+static void (*PHOriginalUIApplicationSendEvent)(id, SEL, UIEvent *);
 
-- (void)sendEvent:(UIEvent *)event {
-    %orig;
+static void PHUIApplicationSendEvent(id self, SEL _cmd, UIEvent *event) {
+    if (PHOriginalUIApplicationSendEvent != NULL) {
+        PHOriginalUIApplicationSendEvent(self, _cmd, event);
+    }
+
     [PHGestureDetector() processEvent:event];
 }
 
-%end
+static void PHInstallSendEventHook(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class applicationClass = objc_getClass("UIApplication");
+        if (applicationClass == Nil) {
+            return;
+        }
+
+        SEL selector = @selector(sendEvent:);
+        Method method = class_getInstanceMethod(applicationClass, selector);
+        if (method == NULL) {
+            return;
+        }
+
+        IMP original = method_getImplementation(method);
+        if (original == NULL) {
+            return;
+        }
+
+        PHOriginalUIApplicationSendEvent = (void (*)(id, SEL, UIEvent *))original;
+        method_setImplementation(method, (IMP)PHUIApplicationSendEvent);
+    });
+}
 
 %ctor {
     @autoreleasepool {
         PHGestureDetector();
+        PHInstallSendEventHook();
     }
 }
