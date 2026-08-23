@@ -26,24 +26,29 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Build standard package
+      - name: Build ProjetoH dylib
         run: |
-          make clean package FINALPACKAGE=1
+          make clean
+          make FINALPACKAGE=1
 
-      - name: Build rootless package
-        run: |
-          make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
-
-      - name: Collect packages
+      - name: Collect dylib
         shell: bash
         run: |
+          set -e
           mkdir -p artifacts
-          find packages -maxdepth 1 -type f -name '*.deb' -exec cp {} artifacts/ \;
+          DYLIB="$(find .theos -type f -name 'ProjetoH.dylib' | head -n 1)"
+          if [ -z "$DYLIB" ]; then
+            echo "ProjetoH.dylib not found"
+            find .theos -type f | sort | tail -n 100
+            exit 1
+          fi
+          cp "$DYLIB" "artifacts/ProjetoH.dylib"
+          file "artifacts/ProjetoH.dylib"
           ls -lah artifacts
 
-      - name: Upload packages
+      - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-packages
-          path: artifacts/*.deb
+          name: ProjetoH-dylib
+          path: artifacts/ProjetoH.dylib
           if-no-files-found: error
