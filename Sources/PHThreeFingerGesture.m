@@ -1,7 +1,7 @@
 #import "PHThreeFingerGesture.h"
 #import "PHOverlayManager.h"
 
-static const NSUInteger PHRequiredFingerCount = 3;
+static const NSUInteger PHRequiredFingerCount = 2;
 static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
 
 @interface PHThreeFingerGesture ()
