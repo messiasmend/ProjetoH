@@ -1,6 +1,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import "Sources/PHThreeFingerGesture.h"
+#import "Sources/PHOverlayManager.h"
 
 static PHThreeFingerGesture *PHGestureDetector(void) {
     static PHThreeFingerGesture *detector;
@@ -15,9 +16,12 @@ static void (*PHOriginalUIApplicationSendEvent)(id, SEL, UIEvent *);
 static void (*PHOriginalUIWindowSendEvent)(id, SEL, UIEvent *);
 
 static void PHProcessEvent(UIEvent *event) {
-    if (event != nil) {
-        [PHGestureDetector() processEvent:event];
+    if (event == nil) {
+        return;
     }
+
+    [PHGestureDetector() processEvent:event];
+    [[PHOverlayManager sharedManager] processInspectionEvent:event];
 }
 
 static void PHUIApplicationSendEvent(id self, SEL _cmd, UIEvent *event) {
@@ -79,9 +83,6 @@ static void PHInstallSendEventHooks(void) {
     @autoreleasepool {
         PHGestureDetector();
 
-        // UIKit classes can be initialized very early during dylib loading.
-        // Defer installation to the main queue so the classes and UIApplication
-        // lifecycle are settled before we alter their implementations.
         dispatch_async(dispatch_get_main_queue(), ^{
             PHInstallSendEventHooks();
         });
