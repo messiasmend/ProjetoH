@@ -182,15 +182,25 @@
     });
 }
 
-/* Return the deepest UIKit view at a screen/window point. UIView's public
-   hitTest:withEvent: already performs the recursive subview traversal, but
-   doing it against the real application window (not the inspector window)
-   is essential because the inspector sits above the app at alert level. */
+/* Recursive selector used instead of UIView hitTest:. hitTest: ignores views
+   that have userInteractionEnabled == NO, which is exactly what happens with
+   many UIImageView/UILabel elements. Inspector selection must still be able
+   to select those visual elements. */
+- (UIView *)deepestViewFrom:(UIView *)view point:(CGPoint)point {
+    if (view == nil || view.hidden || view.alpha <= 0.01) return nil;
+    if (![view pointInside:point withEvent:nil]) return nil;
+
+    for (UIView *subview in view.subviews.reverseObjectEnumerator) {
+        CGPoint subPoint = [subview convertPoint:point fromView:view];
+        UIView *deepest = [self deepestViewFrom:subview point:subPoint];
+        if (deepest != nil) return deepest;
+    }
+    return view;
+}
+
 - (UIView *)deepestViewAtPoint:(CGPoint)point inWindow:(UIWindow *)window {
     if (window == nil || window.hidden || window.alpha <= 0.0) return nil;
-    UIView *hit = [window hitTest:point withEvent:nil];
-    if (hit == nil || hit.window != window) return nil;
-    return hit;
+    return [self deepestViewFrom:window point:point];
 }
 
 - (void)processInspectionEvent:(UIEvent *)event {
@@ -205,10 +215,8 @@
     }
     if (candidate == nil) return;
 
-    /* Always resolve the selection from the application's real window.
-       candidate.view can be a container/root view depending on where the
-       event was intercepted. A fresh hit-test at the exact touch coordinate
-       asks UIKit for the deepest eligible subview instead. */
+    /* Resolve the selection against the real application window. The inspector
+       window is above it but is interaction-disabled during selection. */
     UIWindow *window = candidate.window;
     if (window == nil || window == self.inspectorWindow) return;
 
