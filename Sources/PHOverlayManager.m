@@ -20,6 +20,7 @@
 @property (nonatomic, weak, nullable) WKWebView *highlightedWebView;
 @property (nonatomic, assign) CGFloat previousBorderWidth;
 @property (nonatomic, strong, nullable) UIColor *previousBorderColor;
+- (void)showHierarchy;
 @end
 
 @implementation PHInspectorViewController
@@ -96,6 +97,7 @@
         hierarchy.translatesAutoresizingMaskIntoConstraints = NO;
         [hierarchy setTitle:@"Hierarquia" forState:UIControlStateNormal];
         hierarchy.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
+        [hierarchy addTarget:self action:@selector(hierarchyTapped) forControlEvents:UIControlEventTouchUpInside];
         [panel addSubview:title];
         [panel addSubview:subtitleLabel];
         [panel addSubview:detailsLabel];
@@ -116,6 +118,7 @@
             [detailsLabel.topAnchor constraintEqualToAnchor:subtitleLabel.bottomAnchor constant:20.0],
             [detailsLabel.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
             [detailsLabel.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],
+            [detailsLabel.bottomAnchor constraintLessThanOrEqualToAnchor:hierarchy.topAnchor constant:-10.0],
             [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
             [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],
             [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],
@@ -130,6 +133,10 @@
 
 - (void)showSelectedWebElement:(NSString *)details {
     [self showPanelWithSubtitle:@"Elemento Web selecionado" details:details];
+}
+
+- (void)hierarchyTapped {
+    [[PHOverlayManager sharedManager] showHierarchy];
 }
 
 + (NSString *)descriptionForView:(UIView *)view {
@@ -265,6 +272,50 @@
             [self.inspectorViewController showSelectedWebElement:details];
         });
     }];
+}
+
+- (void)showHierarchy {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.highlightedWebView != nil) {
+            NSString *script = @"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(!e)return JSON.stringify([]);var out=[];var n=e;while(n&&n.nodeType===1&&out.length<12){var s=n.tagName.toLowerCase();if(n.id)s+='#'+n.id;if(typeof n.className==='string'&&n.className.trim())s+='.'+n.className.trim().split(/\\s+/).slice(0,3).join('.');out.push(s);n=n.parentElement;}return JSON.stringify(out);})()";
+            [self.highlightedWebView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (error != nil || ![result isKindOfClass:[NSString class]]) {
+                        [self.inspectorViewController showSelectedWebElement:@"Hierarquia Web\n\nNão foi possível obter a árvore DOM."];
+                        return;
+                    }
+                    NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding];
+                    NSArray *nodes = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+                    NSMutableString *details = [NSMutableString stringWithString:@"Árvore DOM (elemento → ancestrais)\n\n"];
+                    if (![nodes isKindOfClass:[NSArray class]] || nodes.count == 0) {
+                        [details appendString:@"Nenhum elemento selecionado."];
+                    } else {
+                        for (NSUInteger i = 0; i < nodes.count; i++) {
+                            NSString *node = [nodes[i] isKindOfClass:[NSString class]] ? nodes[i] : @"?";
+                            [details appendFormat:@"%@%@ %@\n", i == 0 ? @"▶" : @"↳", i == 0 ? @"" : @" ", node];
+                        }
+                    }
+                    [self.inspectorViewController showSelectedWebElement:details];
+                });
+            }];
+            return;
+        }
+
+        UIView *view = self.highlightedView;
+        if (view == nil) {
+            [self.inspectorViewController showSelectedWebElement:@"Hierarquia\n\nNenhum elemento selecionado."];
+            return;
+        }
+        NSMutableString *details = [NSMutableString stringWithString:@"Hierarquia nativa (view → superviews)\n\n"];
+        UIView *cursor = view;
+        NSUInteger index = 0;
+        while (cursor != nil && index < 12) {
+            [details appendFormat:@"%@ %@\n", index == 0 ? @"▶" : @"↳", NSStringFromClass(cursor.class)];
+            cursor = cursor.superview;
+            index++;
+        }
+        [self.inspectorViewController showSelectedWebElement:details];
+    });
 }
 
 - (void)processInspectionEvent:(UIEvent *)event {
