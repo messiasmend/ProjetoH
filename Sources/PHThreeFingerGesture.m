@@ -1,10 +1,8 @@
 #import "PHThreeFingerGesture.h"
 #import "PHOverlayManager.h"
 
+static const NSUInteger PHRequiredFingerCount = 3;
 static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
-// Temporary activation threshold for the injection test. We will restore the
-// reference gesture threshold after confirming the standalone dylib works.
-static NSUInteger const PHActivationMinimumTouches = 2;
 
 @interface PHThreeFingerGesture ()
 @property (nonatomic, strong, nullable) NSTimer *holdTimer;
@@ -14,7 +12,7 @@ static NSUInteger const PHActivationMinimumTouches = 2;
 @implementation PHThreeFingerGesture
 
 - (void)processEvent:(UIEvent *)event {
-    if (![event respondsToSelector:@selector(allTouches)]) {
+    if (event == nil || ![event respondsToSelector:@selector(allTouches)]) {
         return;
     }
 
@@ -22,15 +20,18 @@ static NSUInteger const PHActivationMinimumTouches = 2;
     NSUInteger activeTouches = 0;
 
     for (UITouch *touch in touches) {
-        UITouchPhase phase = touch.phase;
-        if (phase == UITouchPhaseBegan ||
-            phase == UITouchPhaseMoved ||
-            phase == UITouchPhaseStationary) {
-            activeTouches += 1;
+        switch (touch.phase) {
+            case UITouchPhaseBegan:
+            case UITouchPhaseMoved:
+            case UITouchPhaseStationary:
+                activeTouches += 1;
+                break;
+            default:
+                break;
         }
     }
 
-    if (activeTouches >= PHActivationMinimumTouches) {
+    if (activeTouches >= PHRequiredFingerCount) {
         [self armIfNeeded];
     } else {
         [self cancelHoldAndResetTrigger];
@@ -69,10 +70,17 @@ static NSUInteger const PHActivationMinimumTouches = 2;
     }
 
     self.triggered = YES;
-    [[PHOverlayManager sharedManager] presentTestOverlayIfNeeded];
+    [[PHOverlayManager sharedManager] presentInspectorIfNeeded];
 }
 
 - (void)cancelHoldAndResetTrigger {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self cancelHoldAndResetTrigger];
+        });
+        return;
+    }
+
     [self cancelTimer];
     self.triggered = NO;
 }
