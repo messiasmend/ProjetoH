@@ -1,0 +1,49 @@
+name: Build ProjetoH
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Theos
+        uses: waruhachi/theos-action@v2.4.6
+        with:
+          theos-src: theos/theos
+          theos-branch: master
+          sdks-src: theos/sdks
+          sdks-branch: master
+
+      - name: Build standard package
+        run: |
+          make clean package FINALPACKAGE=1
+
+      - name: Build rootless package
+        run: |
+          make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+
+      - name: Collect packages
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          find packages -maxdepth 1 -type f -name '*.deb' -exec cp {} artifacts/ \;
+          ls -lah artifacts
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjetoH-packages
+          path: artifacts/*.deb
+          if-no-files-found: error
