@@ -16,8 +16,7 @@ static void (*PHOriginalUIWindowSendEvent)(id, SEL, UIEvent *);
 
 static void PHProcessEventBeforeOriginal(UIEvent *event) {
     if (event == nil) return;
-    UIWindow *inspectorWindow = [PHOverlayManager sharedManager].inspectorWindow;
-    [[PHPreciseSelector sharedSelector] processEvent:event inspectorWindow:inspectorWindow];
+    [[PHPreciseSelector sharedSelector] processEvent:event inspectorWindow:nil];
 }
 
 static void PHProcessEventAfterOriginal(UIEvent *event) {
