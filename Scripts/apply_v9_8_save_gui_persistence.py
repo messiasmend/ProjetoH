@@ -12,8 +12,8 @@ assert old in s, "V9.8 marker: panel size not found"
 s = s.replace(old, new, 1)
 
 # Replace the complete renderer so the original three buttons stay together and
-# Ocultar/Ocultos/Salvar are always a separate second row. Salvar is only visible
-# after a hide operation creates a pending change.
+# Ocultar/Ocultos/Salvar are always visible as a separate second row.
+# Salvar remains disabled-looking until there is a pending hide operation.
 start = s.index('- (void)render:(BOOL)hierarchyMode {')
 end = s.index('- (void)hierarchyTapped {', start)
 new_render = r'''- (void)render:(BOOL)hierarchyMode {
@@ -37,8 +37,9 @@ new_render = r'''- (void)render:(BOOL)hierarchyMode {
     UIButton *hidden = [self button:@"Ocultos" action:@selector(hiddenTapped)];
     UIButton *save = [self button:@"Salvar" action:@selector(saveTapped)];
     BOOL hasPending = PHPendingSelectors.count > 0;
-    save.hidden = !hasPending;
-    if (!hasPending) save.alpha = 0.35;
+    save.hidden = NO;
+    save.alpha = hasPending ? 1.0 : 0.35;
+    save.userInteractionEnabled = hasPending;
 
     for (UIView *v in @[title, subtitle, scroll, left, copy, close, hide, hidden, save]) [p addSubview:v];
 
@@ -74,7 +75,7 @@ new_render = r'''- (void)render:(BOOL)hierarchyMode {
         [close.bottomAnchor constraintEqualToAnchor:p.bottomAnchor constant:-78],
         [close.widthAnchor constraintEqualToConstant:100],
 
-        // Row 2: element filtering actions. Salvar appears only when needed.
+        // Row 2: element filtering actions.
         [hide.leadingAnchor constraintEqualToAnchor:p.leadingAnchor constant:18],
         [hide.bottomAnchor constraintEqualToAnchor:p.bottomAnchor constant:-24],
         [hide.widthAnchor constraintEqualToConstant:100],
