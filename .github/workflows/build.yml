@@ -1,4 +1,4 @@
-name: Build ProjetoH V2
+name: Build ProjetoH V3
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
           set -e
           make clean package FINALPACKAGE=1
 
-      - name: Collect the actual staged dylib
+      - name: Collect and validate standalone V3 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -59,16 +59,16 @@ jobs:
             exit 1
           fi
 
-          cp "$DYLIB" artifacts/ProjetoH-V2.dylib
+          cp "$DYLIB" artifacts/ProjetoH-V3.dylib
 
-          echo '--- Final standalone dylib ---'
-          file artifacts/ProjetoH-V2.dylib
-          file -b artifacts/ProjetoH-V2.dylib | grep -q 'dynamically linked shared library'
+          echo '--- Final ProjetoH V3 ---'
+          file artifacts/ProjetoH-V3.dylib
+          file -b artifacts/ProjetoH-V3.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V2 dylib
+      - name: Upload ProjetoH V3 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V2-dylib
-          path: artifacts/ProjetoH-V2.dylib
+          name: ProjetoH-V3-dylib
+          path: artifacts/ProjetoH-V3.dylib
           if-no-files-found: error
