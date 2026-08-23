@@ -14,7 +14,7 @@ assert old in source, "V9 marker: showPanel start not found"
 source = source.replace(old, new, 1)
 
 old = '''        UIButton *close = [self makeCloseButton];\n        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];'''
-new = '''        UIButton *close = [self makeCloseButton];\n        UIButton *copy = [UIButton buttonWithType:UIButtonTypeSystem];\n        copy.translatesAutoresizingMaskIntoConstraints = NO;\n        [copy setTitle:@"Copiar" forState:UIControlStateNormal];\n        copy.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];\n        [copy addTarget:self action:@selector(copyTapped) forControlEvents:UIControlEventTouchUpInside];\n        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];'''
+new = '''        UIButton *close = [self makeCloseButton];\n        UIButton *copy = [UIButton buttonWithType:UIButtonTypeSystem];\n        copy.translatesAutoresizingMaskIntoConstraints = NO;\n        copy.tag = 9001;\n        [copy setTitle:@"Copiar" forState:UIControlStateNormal];\n        copy.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];\n        [copy addTarget:self action:@selector(copyTapped) forControlEvents:UIControlEventTouchUpInside];\n        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];'''
 assert old in source, "V9 marker: close button block not found"
 source = source.replace(old, new, 1)
 
@@ -29,7 +29,7 @@ assert old in source, "V9 marker: button constraints not found"
 source = source.replace(old, new, 1)
 
 old = '''- (void)closeTapped { [[PHOverlayManager sharedManager] dismissOverlay]; }'''
-new = '''- (void)copyTapped {\n    UIPasteboard.generalPasteboard.string = self.currentDetails ?: @"";\n    UIButton *button = (UIButton *)[self.view viewWithTag:9001];\n    if (button == nil) {\n        for (UIView *subview in self.view.subviews) {\n            if (![subview isKindOfClass:[UIView class]]) continue;\n            for (UIView *candidate in subview.subviews) {\n                if ([candidate isKindOfClass:[UIButton class]] && [[(UIButton *)candidate titleForState:UIControlStateNormal] isEqualToString:@"Copiar"]) {\n                    button = (UIButton *)candidate;\n                    break;\n                }\n            }\n            if (button != nil) break;\n        }\n    }\n    if (button != nil) {\n        [button setTitle:@"✓ Copiado" forState:UIControlStateNormal];\n        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{\n            [button setTitle:@"Copiar" forState:UIControlStateNormal];\n        });\n    }\n}\n\n- (void)closeTapped { [[PHOverlayManager sharedManager] dismissOverlay]; }'''
+new = '''- (void)copyTapped {\n    UIPasteboard.generalPasteboard.string = self.currentDetails ?: @"";\n    UIButton *button = (UIButton *)[self.view viewWithTag:9001];\n    if (button != nil) {\n        [button setTitle:@"✓ Copiado" forState:UIControlStateNormal];\n        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{\n            [button setTitle:@"Copiar" forState:UIControlStateNormal];\n        });\n    }\n}\n\n- (void)closeTapped { [[PHOverlayManager sharedManager] dismissOverlay]; }'''
 assert old in source, "V9 marker: closeTapped method not found"
 source = source.replace(old, new, 1)
 
