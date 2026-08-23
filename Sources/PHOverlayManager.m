@@ -4,6 +4,7 @@
 @property (nonatomic, assign) BOOL selectionMode;
 @property (nonatomic, strong, nullable) UIView *selectedView;
 @property (nonatomic, strong, nullable) UIView *highlightView;
++ (NSString *)descriptionForView:(UIView *)view;
 - (void)showSelectionPrompt;
 - (void)showSelectedView:(UIView *)view;
 @end
@@ -80,7 +81,7 @@
             [bubble.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:20.0],
             [bubble.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-20.0],
             [bubble.heightAnchor constraintEqualToConstant:44.0],
-            [bubble.widthAnchor constraintLessThanOrEqualToConstant:330.0]
+            [bubble.widthAnchor constraintEqualToConstant:330.0]
         ]];
     });
 }
@@ -119,6 +120,8 @@
         [NSLayoutConstraint activateConstraints:@[
             [panel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
             [panel.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
+            [panel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:12.0],
+            [panel.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-12.0],
             [panel.widthAnchor constraintEqualToConstant:350.0],
             [panel.heightAnchor constraintEqualToConstant:430.0],
             [title.topAnchor constraintEqualToAnchor:panel.topAnchor constant:22.0],
@@ -138,7 +141,7 @@
 
 + (NSString *)descriptionForView:(UIView *)view {
     CGRect frame = view.frame;
-    NSString *text = [NSString stringWithFormat:
+    return [NSString stringWithFormat:
         @"Classe: %@\n\nFrame:\n  x: %.1f\n  y: %.1f\n  largura: %.1f\n  altura: %.1f\n\nTag: %ld\nHidden: %@\nAlpha: %.2f\nInteração: %@",
         NSStringFromClass(view.class),
         frame.origin.x, frame.origin.y, frame.size.width, frame.size.height,
@@ -146,7 +149,6 @@
         view.hidden ? @"SIM" : @"NÃO",
         view.alpha,
         view.userInteractionEnabled ? @"SIM" : @"NÃO"];
-    return text;
 }
 
 - (void)closeTapped {
@@ -227,7 +229,8 @@
 - (void)startSelectionMode {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self installInspectorWindowIfNeeded];
-        self.selectionModeActive = (self.inspectorWindow != nil);
+        if (self.inspectorWindow == nil) return;
+        self.selectionModeActive = YES;
         [self.inspectorViewController showSelectionPrompt];
         self.inspectorWindow.userInteractionEnabled = NO;
     });
@@ -245,7 +248,8 @@
     }
     if (candidate == nil) return;
 
-    UIView *window = candidate.window;
+    UIWindow *window = candidate.window;
+    if (window == nil) return;
     CGPoint point = [candidate locationInView:window];
     UIView *hit = [window hitTest:point withEvent:event];
     if (hit == nil) return;
