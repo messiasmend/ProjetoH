@@ -164,6 +164,7 @@
     window.backgroundColor = UIColor.clearColor;
     window.rootViewController = controller;
     window.hidden = NO;
+    /* The inspector must never become the hit-test target while selection is active. */
     window.userInteractionEnabled = NO;
     self.inspectorViewController = controller;
     self.inspectorWindow = window;
@@ -181,25 +182,41 @@
     });
 }
 
+/* Return the deepest UIKit view at a screen/window point. UIView's public
+   hitTest:withEvent: already performs the recursive subview traversal, but
+   doing it against the real application window (not the inspector window)
+   is essential because the inspector sits above the app at alert level. */
+- (UIView *)deepestViewAtPoint:(CGPoint)point inWindow:(UIWindow *)window {
+    if (window == nil || window.hidden || window.alpha <= 0.0) return nil;
+    UIView *hit = [window hitTest:point withEvent:nil];
+    if (hit == nil || hit.window != window) return nil;
+    return hit;
+}
+
 - (void)processInspectionEvent:(UIEvent *)event {
     if (!self.selectionModeActive || event == nil || ![event respondsToSelector:@selector(allTouches)]) return;
+
     UITouch *candidate = nil;
     for (UITouch *touch in event.allTouches) {
-        if (touch.phase == UITouchPhaseBegan && touch.window != self.inspectorWindow) { candidate = touch; break; }
+        if (touch.phase == UITouchPhaseBegan && touch.window != self.inspectorWindow) {
+            candidate = touch;
+            break;
+        }
     }
     if (candidate == nil) return;
 
-    /* The touch's view is the view UIKit actually hit-tested. Using the
-       overlay window's hitTest here can return the inspector's root UIView,
-       which was the cause of the previous build always selecting UIView. */
-    UIView *selected = candidate.view;
-    if (selected == nil || selected.window == self.inspectorWindow) {
-        UIWindow *window = candidate.window;
-        if (window == nil || window == self.inspectorWindow) return;
-        CGPoint point = [candidate locationInView:window];
-        selected = [window hitTest:point withEvent:nil];
-    }
+    /* Always resolve the selection from the application's real window.
+       candidate.view can be a container/root view depending on where the
+       event was intercepted. A fresh hit-test at the exact touch coordinate
+       asks UIKit for the deepest eligible subview instead. */
+    UIWindow *window = candidate.window;
+    if (window == nil || window == self.inspectorWindow) return;
+
+    CGPoint point = [candidate locationInView:window];
+    UIView *selected = [self deepestViewAtPoint:point inWindow:window];
+    if (selected == nil) selected = candidate.view;
     if (selected == nil || selected.window == self.inspectorWindow) return;
+
     [self selectView:selected];
 }
 
