@@ -12,42 +12,78 @@ static PHThreeFingerGesture *PHGestureDetector(void) {
 }
 
 static void (*PHOriginalUIApplicationSendEvent)(id, SEL, UIEvent *);
+static void (*PHOriginalUIWindowSendEvent)(id, SEL, UIEvent *);
+
+static void PHProcessEvent(UIEvent *event) {
+    if (event != nil) {
+        [PHGestureDetector() processEvent:event];
+    }
+}
 
 static void PHUIApplicationSendEvent(id self, SEL _cmd, UIEvent *event) {
     if (PHOriginalUIApplicationSendEvent != NULL) {
         PHOriginalUIApplicationSendEvent(self, _cmd, event);
     }
 
-    [PHGestureDetector() processEvent:event];
+    PHProcessEvent(event);
 }
 
-static void PHInstallSendEventHook(void) {
+static void PHUIWindowSendEvent(id self, SEL _cmd, UIEvent *event) {
+    if (PHOriginalUIWindowSendEvent != NULL) {
+        PHOriginalUIWindowSendEvent(self, _cmd, event);
+    }
+
+    PHProcessEvent(event);
+}
+
+static BOOL PHInstallHook(Class cls, SEL selector, IMP replacement, void (**originalStorage)(id, SEL, UIEvent *)) {
+    if (cls == Nil) {
+        return NO;
+    }
+
+    Method method = class_getInstanceMethod(cls, selector);
+    if (method == NULL) {
+        return NO;
+    }
+
+    IMP original = method_getImplementation(method);
+    if (original == NULL || original == replacement) {
+        return NO;
+    }
+
+    *originalStorage = (void (*)(id, SEL, UIEvent *))original;
+    method_setImplementation(method, replacement);
+    return YES;
+}
+
+static void PHInstallSendEventHooks(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         Class applicationClass = objc_getClass("UIApplication");
-        if (applicationClass == Nil) {
-            return;
-        }
-
+        Class windowClass = objc_getClass("UIWindow");
         SEL selector = @selector(sendEvent:);
-        Method method = class_getInstanceMethod(applicationClass, selector);
-        if (method == NULL) {
-            return;
-        }
 
-        IMP original = method_getImplementation(method);
-        if (original == NULL) {
-            return;
-        }
+        PHInstallHook(applicationClass,
+                      selector,
+                      (IMP)PHUIApplicationSendEvent,
+                      &PHOriginalUIApplicationSendEvent);
 
-        PHOriginalUIApplicationSendEvent = (void (*)(id, SEL, UIEvent *))original;
-        method_setImplementation(method, (IMP)PHUIApplicationSendEvent);
+        PHInstallHook(windowClass,
+                      selector,
+                      (IMP)PHUIWindowSendEvent,
+                      &PHOriginalUIWindowSendEvent);
     });
 }
 
 %ctor {
     @autoreleasepool {
         PHGestureDetector();
-        PHInstallSendEventHook();
+
+        // UIKit classes can be initialized very early during dylib loading.
+        // Defer installation to the main queue so the classes and UIApplication
+        // lifecycle are settled before we alter their implementations.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            PHInstallSendEventHooks();
+        });
     }
 }
