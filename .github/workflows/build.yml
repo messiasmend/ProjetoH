@@ -67,3 +67,5 @@ jobs:
           name: ProjetoH-V7-dylib
           path: artifacts/ProjetoH-V7.dylib
           if-no-files-found: error
+
+# V7 trigger: ensure the corrected workflow itself is executed on main.
