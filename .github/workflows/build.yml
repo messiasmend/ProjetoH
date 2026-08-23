@@ -1,4 +1,4 @@
-name: Build ProjetoH V8
+name: Build ProjetoH V9
 
 on:
   push:
@@ -26,12 +26,17 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
+      - name: Apply V9 copy button patch
+        run: |
+          set -euo pipefail
+          python3 Scripts/apply_v9_copy_button.py
+
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V8 dylib
+      - name: Collect and validate standalone V9 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -55,17 +60,17 @@ jobs:
             echo "Found candidate files, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V8.dylib
-          echo '--- Final ProjetoH V8 ---'
-          file artifacts/ProjetoH-V8.dylib
-          file -b artifacts/ProjetoH-V8.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V9.dylib
+          echo '--- Final ProjetoH V9 ---'
+          file artifacts/ProjetoH-V9.dylib
+          file -b artifacts/ProjetoH-V9.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V8 dylib
+      - name: Upload ProjetoH V9 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V8-dylib
-          path: artifacts/ProjetoH-V8.dylib
+          name: ProjetoH-V9-dylib
+          path: artifacts/ProjetoH-V9.dylib
           if-no-files-found: error
 
-# V8: DOM hierarchy inspection from the selected Web element.
+# V9: add a copy button that copies the current inspector result to the iOS clipboard.
