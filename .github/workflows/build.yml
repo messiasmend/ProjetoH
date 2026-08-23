@@ -1,4 +1,4 @@
-name: Build ProjetoH V9
+name: Build ProjetoH V9.3
 
 on:
   push:
@@ -31,12 +31,20 @@ jobs:
           set -euo pipefail
           python3 Scripts/apply_v9_scroll_layout.py
 
+      - name: Validate V9.3 source
+        run: |
+          set -euo pipefail
+          test -f Sources/PHCustomFiltersManager.m
+          grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
+          grep -q 'Ocultar' Sources/PHCustomFiltersManager.m
+          grep -q 'Ocultos' Sources/PHCustomFiltersManager.m
+
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V9 dylib
+      - name: Collect and validate standalone V9.3 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -60,17 +68,17 @@ jobs:
             echo "Found candidate files, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V9.dylib
-          echo '--- Final ProjetoH V9 ---'
-          file artifacts/ProjetoH-V9.dylib
-          file -b artifacts/ProjetoH-V9.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V9.3.dylib
+          echo '--- Final ProjetoH V9.3 ---'
+          file artifacts/ProjetoH-V9.3.dylib
+          file -b artifacts/ProjetoH-V9.3.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V9 dylib
+      - name: Upload ProjetoH V9.3 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V9-dylib
-          path: artifacts/ProjetoH-V9.dylib
+          name: ProjetoH-V9.3-dylib
+          path: artifacts/ProjetoH-V9.3.dylib
           if-no-files-found: error
 
-# V9.1: inspector details are displayed inside a fixed-height UIScrollView so long DOM results cannot push the buttons out of the panel.
+# V9.3: lightweight hide/restore controls backed by dynamically located custom-filters.json.
