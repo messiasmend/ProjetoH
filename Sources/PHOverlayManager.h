@@ -7,6 +7,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)sharedManager;
 - (void)presentTestOverlayIfNeeded;
 - (void)presentInspectorIfNeeded;
+- (void)startSelectionMode;
+- (void)processInspectionEvent:(UIEvent *)event;
 - (void)dismissOverlay;
 
 @end
