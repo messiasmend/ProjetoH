@@ -1,4 +1,4 @@
-name: Build ProjetoH V3
+name: Build ProjetoH V4
 
 on:
   push:
@@ -28,22 +28,20 @@ jobs:
 
       - name: Build package and dylib
         run: |
-          set -e
+          set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V3 dylib
+      - name: Collect and validate standalone V4 dylib
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
-
           CANDIDATES=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' -print)
           if [ -z "$CANDIDATES" ]; then
             echo "No staged ProjetoH.dylib found."
             find .theos -type f | sort | tail -n 200
             exit 1
           fi
-
           DYLIB=""
           while IFS= read -r candidate; do
             description=$(file -b "$candidate")
@@ -53,22 +51,19 @@ jobs:
               break
             fi
           done <<< "$CANDIDATES"
-
           if [ -z "$DYLIB" ]; then
             echo "Found candidate files, but none is a real Mach-O DYLIB."
             exit 1
           fi
-
-          cp "$DYLIB" artifacts/ProjetoH-V3.dylib
-
-          echo '--- Final ProjetoH V3 ---'
-          file artifacts/ProjetoH-V3.dylib
-          file -b artifacts/ProjetoH-V3.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V4.dylib
+          echo '--- Final ProjetoH V4 ---'
+          file artifacts/ProjetoH-V4.dylib
+          file -b artifacts/ProjetoH-V4.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V3 dylib
+      - name: Upload ProjetoH V4 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V3-dylib
-          path: artifacts/ProjetoH-V3.dylib
+          name: ProjetoH-V4-dylib
+          path: artifacts/ProjetoH-V4.dylib
           if-no-files-found: error
