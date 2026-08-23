@@ -1,6 +1,5 @@
 #import "PHThreeFingerGesture.h"
 #import "PHOverlayManager.h"
-#import "PHPreciseSelector.h"
 
 static const NSUInteger PHRequiredFingerCount = 3;
 static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
@@ -46,7 +45,6 @@ static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
     self.holdTimer = nil;
     if (self.triggered) return;
     self.triggered = YES;
-    [[PHPreciseSelector sharedSelector] reset];
     [[PHOverlayManager sharedManager] startSelectionMode];
 }
 
