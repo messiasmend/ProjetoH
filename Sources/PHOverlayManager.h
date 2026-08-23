@@ -9,6 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)presentInspectorIfNeeded;
 - (void)startSelectionMode;
 - (void)processInspectionEvent:(UIEvent *)event;
+- (void)selectView:(UIView *)view;
 - (void)dismissOverlay;
 
 @end
