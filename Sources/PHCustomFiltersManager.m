@@ -12,8 +12,8 @@
 static char K1,K2;
 static NSString *PHPath(void){NSString*h=NSHomeDirectory();NSDirectoryEnumerator*e=[NSFileManager.defaultManager enumeratorAtPath:h];NSString*p;while((p=[e nextObject]))if([p.lastPathComponent.lowercaseString isEqualToString:@"custom-filters.json"])return[h stringByAppendingPathComponent:p];return[h stringByAppendingPathComponent:@"Documents/custom-filters.json"];}
 static id PHM(void){Class c=NSClassFromString(@"PHOverlayManager");return[c respondsToSelector:@selector(sharedManager)]?[c performSelector:@selector(sharedManager)]:nil;}
-static WKWebView*PHW(void){@try{return[PHM() valueForKey:@"highlightedWebView"];}@catch(...){return nil;}}
-static UIViewController*PHI(void){@try{return[PHM() valueForKey:@"inspectorViewController"];}@catch(...){return nil;}}
+static WKWebView*PHW(void){id m=PHM();return[m valueForKey:@"highlightedWebView"];}
+static UIViewController*PHI(void){id m=PHM();return[m valueForKey:@"inspectorViewController"];}
 static NSMutableArray*PHLoad(void){NSData*d=[NSData dataWithContentsOfFile:PHPath()];if(!d)return[NSMutableArray array];id j=[NSJSONSerialization JSONObjectWithData:d options:NSJSONReadingMutableContainers error:nil];if([j isKindOfClass:NSDictionary.class])j=j[@"filters"];return[j isKindOfClass:NSArray.class]?[j mutableCopy]:[NSMutableArray array];}
 static void PHSave(NSArray*a){NSString*p=PHPath();[[NSFileManager defaultManager]createDirectoryAtPath:p.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];NSData*d=[NSJSONSerialization dataWithJSONObject:@{@"version":@1, @"filters":a?:@[]} options:0 error:nil];[d writeToFile:p atomically:YES];}
 static NSString*PHSelected(void){return @"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(!e)return '{}';function p(n){if(n.id)return '#'+CSS.escape(n.id);var a=[];while(n&&n.nodeType===1&&n!==document.body){var q=n.parentElement;if(!q)break;var s=[...q.children].filter(x=>x.tagName===n.tagName);a.unshift(n.tagName.toLowerCase()+':nth-of-type('+(s.indexOf(n)+1)+')');n=q}return a.join(' > ')}return JSON.stringify({selector:p(e)})})()";}
