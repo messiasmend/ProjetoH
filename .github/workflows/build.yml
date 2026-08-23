@@ -1,4 +1,4 @@
-name: Build ProjetoH V7
+name: Build ProjetoH V8
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V7 dylib
+      - name: Collect and validate standalone V8 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -55,17 +55,17 @@ jobs:
             echo "Found candidate files, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V7.dylib
-          echo '--- Final ProjetoH V7 ---'
-          file artifacts/ProjetoH-V7.dylib
-          file -b artifacts/ProjetoH-V7.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V8.dylib
+          echo '--- Final ProjetoH V8 ---'
+          file artifacts/ProjetoH-V8.dylib
+          file -b artifacts/ProjetoH-V8.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V7 dylib
+      - name: Upload ProjetoH V8 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V7-dylib
-          path: artifacts/ProjetoH-V7.dylib
+          name: ProjetoH-V8-dylib
+          path: artifacts/ProjetoH-V8.dylib
           if-no-files-found: error
 
-# V7 trigger: ensure the corrected workflow itself is executed on main.
+# V8: DOM hierarchy inspection from the selected Web element.
