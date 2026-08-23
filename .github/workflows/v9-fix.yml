@@ -75,3 +75,5 @@ jobs:
           git add Sources/PHOverlayManager.m
           git commit -m 'ProjetoH V9: apply copy fix' || exit 0
           git push
+
+# trigger
