@@ -63,7 +63,7 @@ jobs:
 
           echo '--- Final standalone dylib ---'
           file artifacts/ProjetoH-V2.dylib
-          test "$(file -b artifacts/ProjetoH-V2.dylib | grep -c 'dynamically linked shared library')" -eq 1
+          file -b artifacts/ProjetoH-V2.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
       - name: Upload ProjetoH V2 dylib
