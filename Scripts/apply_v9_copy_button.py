@@ -35,3 +35,5 @@ source = source.replace(old, new, 1)
 
 path.write_text(source, encoding="utf-8")
 print("ProjetoH V9 copy button patch applied successfully.")
+
+# V9 PR build trigger
