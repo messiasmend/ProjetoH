@@ -1,11 +1,5 @@
 #import "PHOverlayManager.h"
 
-@interface PHOverlayWindow : UIWindow
-@end
-
-@implementation PHOverlayWindow
-@end
-
 @interface PHInspectorViewController : UIViewController
 @end
 
@@ -14,11 +8,17 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
 
+    self.modalPresentationStyle = UIModalPresentationOverFullScreen;
     self.view.backgroundColor = UIColor.clearColor;
+
+    UIBlurEffect *blur = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemChromeMaterialDark];
+    UIVisualEffectView *backdrop = [[UIVisualEffectView alloc] initWithEffect:blur];
+    backdrop.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:backdrop];
 
     UIView *panel = [UIView new];
     panel.translatesAutoresizingMaskIntoConstraints = NO;
-    panel.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.97];
+    panel.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.98];
     panel.layer.cornerRadius = 18.0;
     panel.layer.masksToBounds = YES;
 
@@ -45,7 +45,7 @@
 
     UILabel *placeholder = [UILabel new];
     placeholder.translatesAutoresizingMaskIntoConstraints = NO;
-    placeholder.text = @"Nenhum elemento selecionado\n\nA seleção e a hierarquia serão adicionadas\nna próxima etapa.";
+    placeholder.text = @"ProjetoH ativo\n\nA GUI está funcionando.\nA inspeção de UIView será adicionada\nna próxima etapa.";
     placeholder.textColor = [UIColor colorWithWhite:0.78 alpha:1.0];
     placeholder.font = [UIFont systemFontOfSize:14.0];
     placeholder.numberOfLines = 0;
@@ -66,8 +66,15 @@
     [self.view addSubview:panel];
 
     [NSLayoutConstraint activateConstraints:@[
+        [backdrop.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [backdrop.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [backdrop.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [backdrop.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+
         [panel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [panel.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
+        [panel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:20.0],
+        [panel.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-20.0],
         [panel.widthAnchor constraintEqualToConstant:340.0],
         [panel.heightAnchor constraintEqualToConstant:390.0],
         [title.topAnchor constraintEqualToAnchor:panel.topAnchor constant:22.0],
@@ -91,14 +98,14 @@
 }
 
 - (void)closeTapped {
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"PHOverlayCloseRequested" object:nil];
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end
 
 @interface PHOverlayManager ()
-@property (nonatomic, strong, nullable) PHOverlayWindow *window;
-@property (nonatomic, strong, nullable) id closeObserver;
+@property (nonatomic, weak, nullable) UIViewController *presentingViewController;
+@property (nonatomic, strong, nullable) PHInspectorViewController *inspectorViewController;
 @end
 
 @implementation PHOverlayManager
@@ -116,52 +123,80 @@
     [self presentInspectorIfNeeded];
 }
 
-- (void)presentInspectorIfNeeded {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.window != nil) {
-            return;
+- (UIViewController *)topViewControllerFrom:(UIViewController *)root {
+    UIViewController *current = root;
+
+    while (current.presentedViewController != nil && !current.presentedViewController.isBeingDismissed) {
+        current = current.presentedViewController;
+    }
+
+    if ([current isKindOfClass:[UINavigationController class]]) {
+        UIViewController *visible = [(UINavigationController *)current visibleViewController];
+        if (visible != nil && visible != current) {
+            return [self topViewControllerFrom:visible];
         }
+    }
 
-        UIWindowScene *scene = nil;
-        for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
-            if (candidate.activationState == UISceneActivationStateForegroundActive &&
-                [candidate isKindOfClass:[UIWindowScene class]]) {
-                scene = (UIWindowScene *)candidate;
-                break;
-            }
+    if ([current isKindOfClass:[UITabBarController class]]) {
+        UIViewController *selected = [(UITabBarController *)current selectedViewController];
+        if (selected != nil && selected != current) {
+            return [self topViewControllerFrom:selected];
         }
-        if (scene == nil) {
-            return;
-        }
+    }
 
-        PHOverlayWindow *window = [[PHOverlayWindow alloc] initWithWindowScene:scene];
-        window.frame = scene.coordinateSpace.bounds;
-        window.windowLevel = UIWindowLevelAlert + 1.0;
-        window.backgroundColor = UIColor.clearColor;
-        window.rootViewController = [PHInspectorViewController new];
-
-        self.closeObserver = [[NSNotificationCenter defaultCenter] addObserverForName:@"PHOverlayCloseRequested"
-                                                                                  object:nil
-                                                                                   queue:[NSOperationQueue mainQueue]
-                                                                              usingBlock:^(__unused NSNotification *note) {
-            [self dismissOverlay];
-        }];
-
-        self.window = window;
-        [window makeKeyAndVisible];
-    });
+    return current;
 }
 
-- (void)dismissOverlay {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.closeObserver != nil) {
-            [[NSNotificationCenter defaultCenter] removeObserver:self.closeObserver];
-            self.closeObserver = nil;
+- (UIWindow *)activeKeyWindow {
+    for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
+        if (![candidate isKindOfClass:[UIWindowScene class]]) {
+            continue;
         }
-        [self.window resignKeyWindow];
-        self.window.hidden = YES;
-        self.window.rootViewController = nil;
-        self.window = nil;
+
+        UIWindowScene *scene = (UIWindowScene *)candidate;
+        if (scene.activationState != UISceneActivationStateForegroundActive) {
+            continue;
+        }
+
+        for (UIWindow *window in scene.windows.reverseObjectEnumerator) {
+            if (window.isKeyWindow && !window.hidden && window.alpha > 0.0) {
+                return window;
+            }
+        }
+
+        for (UIWindow *window in scene.windows.reverseObjectEnumerator) {
+            if (!window.hidden && window.alpha > 0.0 && window.rootViewController != nil) {
+                return window;
+            }
+        }
+    }
+
+    return nil;
+}
+
+- (void)presentInspectorIfNeeded {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.inspectorViewController.presentingViewController != nil ||
+            self.inspectorViewController.presentedViewController != nil) {
+            return;
+        }
+
+        UIWindow *window = [self activeKeyWindow];
+        UIViewController *root = window.rootViewController;
+        if (root == nil) {
+            return;
+        }
+
+        UIViewController *presenter = [self topViewControllerFrom:root];
+        if (presenter == nil || presenter.view.window == nil || presenter.isBeingDismissed) {
+            return;
+        }
+
+        PHInspectorViewController *inspector = [PHInspectorViewController new];
+        self.presentingViewController = presenter;
+        self.inspectorViewController = inspector;
+
+        [presenter presentViewController:inspector animated:YES completion:nil];
     });
 }
 
