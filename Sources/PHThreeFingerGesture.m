@@ -2,6 +2,9 @@
 #import "PHOverlayManager.h"
 
 static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
+// Temporary activation threshold for the injection test. We will restore the
+// reference gesture threshold after confirming the standalone dylib works.
+static NSUInteger const PHActivationMinimumTouches = 2;
 
 @interface PHThreeFingerGesture ()
 @property (nonatomic, strong, nullable) NSTimer *holdTimer;
@@ -18,8 +21,6 @@ static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
     NSSet<UITouch *> *touches = event.allTouches;
     NSUInteger activeTouches = 0;
 
-    // Active touches are Began, Moved or Stationary. Ended/Cancelled touches
-    // are not part of the three-finger hold condition.
     for (UITouch *touch in touches) {
         UITouchPhase phase = touch.phase;
         if (phase == UITouchPhaseBegan ||
@@ -29,7 +30,7 @@ static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
         }
     }
 
-    if (activeTouches >= 3) {
+    if (activeTouches >= PHActivationMinimumTouches) {
         [self armIfNeeded];
     } else {
         [self cancelHoldAndResetTrigger];
