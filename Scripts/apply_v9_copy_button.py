@@ -3,6 +3,12 @@ from pathlib import Path
 path = Path("Sources/PHOverlayManager.m")
 source = path.read_text(encoding="utf-8")
 
+# The V9 copy-button patch may already be present in the current source.
+# In that case this script is intentionally idempotent and must not fail.
+if "currentDetails" in source and "copyTapped" in source and "copyButton" in source:
+    print("ProjetoH V9 copy button patch already present; nothing to apply.")
+    raise SystemExit(0)
+
 old = '''@property (nonatomic, strong, nullable) UIColor *previousBorderColor;\n- (void)showHierarchy;'''
 new = '''@property (nonatomic, strong, nullable) UIColor *previousBorderColor;\n@property (nonatomic, copy) NSString *currentDetails;\n- (void)showHierarchy;'''
 assert old in source, "V9 marker: controller properties not found"
@@ -14,17 +20,17 @@ assert old in source, "V9 marker: showPanel start not found"
 source = source.replace(old, new, 1)
 
 old = '''        UIButton *close = [self makeCloseButton];\n        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];'''
-new = '''        UIButton *close = [self makeCloseButton];\n        UIButton *copy = [UIButton buttonWithType:UIButtonTypeSystem];\n        copy.translatesAutoresizingMaskIntoConstraints = NO;\n        copy.tag = 9001;\n        [copy setTitle:@"Copiar" forState:UIControlStateNormal];\n        copy.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];\n        [copy addTarget:self action:@selector(copyTapped) forControlEvents:UIControlEventTouchUpInside];\n        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];'''
+new = '''        UIButton *copyButton = [UIButton buttonWithType:UIButtonTypeSystem];\n        copyButton.translatesAutoresizingMaskIntoConstraints = NO;\n        [copyButton setTitle:@"Copiar" forState:UIControlStateNormal];\n        copyButton.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];\n        [copyButton addTarget:self action:@selector(copyTapped) forControlEvents:UIControlEventTouchUpInside];\n        UIButton *close = [self makeCloseButton];\n        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];'''
 assert old in source, "V9 marker: close button block not found"
 source = source.replace(old, new, 1)
 
 old = '''        [panel addSubview:detailsLabel];\n        [panel addSubview:hierarchy];\n        [panel addSubview:close];'''
-new = '''        [panel addSubview:detailsLabel];\n        [panel addSubview:hierarchy];\n        [panel addSubview:copy];\n        [panel addSubview:close];'''
+new = '''        [panel addSubview:detailsLabel];\n        [panel addSubview:hierarchy];\n        [panel addSubview:copyButton];\n        [panel addSubview:close];'''
 assert old in source, "V9 marker: panel button insertion point not found"
 source = source.replace(old, new, 1)
 
 old = '''            [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],\n            [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],\n            [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],'''
-new = '''            [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],\n            [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],\n            [copy.centerXAnchor constraintEqualToAnchor:panel.centerXAnchor],\n            [copy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],\n            [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],'''
+new = '''            [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],\n            [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],\n            [copyButton.centerXAnchor constraintEqualToAnchor:panel.centerXAnchor],\n            [copyButton.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],\n            [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],'''
 assert old in source, "V9 marker: button constraints not found"
 source = source.replace(old, new, 1)
 
