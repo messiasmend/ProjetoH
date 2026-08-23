@@ -12,10 +12,9 @@ permissions:
 
 jobs:
   build:
-    # Use the Intel macOS runner. GitHub notes that community actions may
-    # require manual handling on arm64; this keeps the Theos toolchain on the
-    # more compatible Intel environment.
-    runs-on: macos-15-intel
+    # macOS-14 is the runner already proven to work in ProjetoH.
+    # Keep the known-good runner while fixing the GUI/persistence code.
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
