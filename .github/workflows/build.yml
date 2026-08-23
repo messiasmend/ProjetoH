@@ -1,4 +1,4 @@
-name: Build ProjetoH V9.4
+name: Build ProjetoH V9.5
 
 on:
   push:
@@ -31,20 +31,22 @@ jobs:
           set -euo pipefail
           python3 Scripts/apply_v9_scroll_layout.py
 
-      - name: Validate V9.4 source
+      - name: Validate V9.5 source
         run: |
           set -euo pipefail
           test -f Sources/PHCustomFiltersManager.m
           grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultar' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultos' Sources/PHCustomFiltersManager.m
+          grep -q 'Salvar' Sources/PHCustomFiltersManager.m
+          grep -q 'PHSavePending' Sources/PHCustomFiltersManager.m
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V9.4 dylib
+      - name: Collect and validate standalone V9.5 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -68,17 +70,17 @@ jobs:
             echo "Found candidate files, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V9.4.dylib
-          echo '--- Final ProjetoH V9.4 ---'
-          file artifacts/ProjetoH-V9.4.dylib
-          file -b artifacts/ProjetoH-V9.4.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V9.5.dylib
+          echo '--- Final ProjetoH V9.5 ---'
+          file artifacts/ProjetoH-V9.5.dylib
+          file -b artifacts/ProjetoH-V9.5.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V9.4 dylib
+      - name: Upload ProjetoH V9.5 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V9.4-dylib
-          path: artifacts/ProjetoH-V9.4.dylib
+          name: ProjetoH-V9.5-dylib
+          path: artifacts/ProjetoH-V9.5.dylib
           if-no-files-found: error
 
-# V9.4: lightweight hide/restore controls backed by dynamically located custom-filters.json.
+# V9.5: pending hide requires explicit Save; persisted filters are reapplied after WebView navigation/reload.
