@@ -5,6 +5,7 @@
 @property (nonatomic, assign) BOOL selectionMode;
 @property (nonatomic, strong, nullable) UIView *selectedView;
 @property (nonatomic, strong, nullable) UIView *highlightView;
+@property (nonatomic, copy) NSString *currentDetails;
 + (NSString *)descriptionForView:(UIView *)view;
 - (void)showSelectionPrompt;
 - (void)showSelectedView:(UIView *)view;
@@ -87,11 +88,17 @@
 - (void)showPanelWithSubtitle:(NSString *)subtitle details:(NSString *)details {
     dispatch_async(dispatch_get_main_queue(), ^{
         self.selectionMode = NO;
+        self.currentDetails = details ?: @"";
         [self clearSubviews];
         UIView *panel = [self makePanel];
         UILabel *title = [self labelWithText:@"ProjetoH Inspector" font:[UIFont boldSystemFontOfSize:21.0] color:UIColor.whiteColor];
         UILabel *subtitleLabel = [self labelWithText:subtitle font:[UIFont systemFontOfSize:14.0] color:[UIColor colorWithWhite:0.72 alpha:1.0]];
         UILabel *detailsLabel = [self labelWithText:details font:[UIFont monospacedSystemFontOfSize:13.0 weight:UIFontWeightRegular] color:[UIColor colorWithWhite:0.86 alpha:1.0]];
+        UIButton *copyButton = [UIButton buttonWithType:UIButtonTypeSystem];
+        copyButton.translatesAutoresizingMaskIntoConstraints = NO;
+        [copyButton setTitle:@"Copiar" forState:UIControlStateNormal];
+        copyButton.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
+        [copyButton addTarget:self action:@selector(copyTapped) forControlEvents:UIControlEventTouchUpInside];
         UIButton *close = [self makeCloseButton];
         UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];
         hierarchy.translatesAutoresizingMaskIntoConstraints = NO;
@@ -102,6 +109,7 @@
         [panel addSubview:subtitleLabel];
         [panel addSubview:detailsLabel];
         [panel addSubview:hierarchy];
+        [panel addSubview:copyButton];
         [panel addSubview:close];
         [self.view addSubview:panel];
         [NSLayoutConstraint activateConstraints:@[
@@ -121,6 +129,8 @@
             [detailsLabel.bottomAnchor constraintLessThanOrEqualToAnchor:hierarchy.topAnchor constant:-10.0],
             [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
             [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],
+            [copyButton.centerXAnchor constraintEqualToAnchor:panel.centerXAnchor],
+            [copyButton.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],
             [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],
             [close.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0]
         ]];
@@ -142,6 +152,10 @@
 + (NSString *)descriptionForView:(UIView *)view {
     CGRect frame = view.frame;
     return [NSString stringWithFormat:@"Classe: %@\n\nFrame:\n  x: %.1f\n  y: %.1f\n  largura: %.1f\n  altura: %.1f\n\nTag: %ld\nHidden: %@\nAlpha: %.2f\nInteração: %@", NSStringFromClass(view.class), frame.origin.x, frame.origin.y, frame.size.width, frame.size.height, (long)view.tag, view.hidden ? @"SIM" : @"NÃO", view.alpha, view.userInteractionEnabled ? @"SIM" : @"NÃO"];
+}
+
+- (void)copyTapped {
+    UIPasteboard.generalPasteboard.string = self.currentDetails ?: @"";
 }
 
 - (void)closeTapped { [[PHOverlayManager sharedManager] dismissOverlay]; }
