@@ -70,7 +70,6 @@
         [backdrop.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [backdrop.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [backdrop.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-
         [panel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [panel.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
         [panel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:20.0],
@@ -197,6 +196,17 @@
         self.inspectorViewController = inspector;
 
         [presenter presentViewController:inspector animated:YES completion:nil];
+    });
+}
+
+- (void)dismissOverlay {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIViewController *inspector = self.inspectorViewController;
+        if (inspector.presentingViewController != nil) {
+            [inspector dismissViewControllerAnimated:YES completion:nil];
+        }
+        self.inspectorViewController = nil;
+        self.presentingViewController = nil;
     });
 }
 
