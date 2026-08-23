@@ -26,11 +26,6 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Apply V9 copy button patch
-        run: |
-          set -euo pipefail
-          python3 Scripts/apply_v9_copy_button.py
-
       - name: Build package and dylib
         run: |
           set -euo pipefail
@@ -73,4 +68,4 @@ jobs:
           path: artifacts/ProjetoH-V9.dylib
           if-no-files-found: error
 
-# V9: add a copy button that copies the current inspector result to the iOS clipboard.
+# V9: build the already-patched inspector directly; no source patch step is required.
