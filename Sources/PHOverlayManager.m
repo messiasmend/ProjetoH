@@ -1,19 +1,9 @@
 #import "PHOverlayManager.h"
 #import <WebKit/WebKit.h>
 
-@interface PHInspectorViewController : UIViewController
-@property (nonatomic, assign) BOOL selectionMode;
-@property (nonatomic, strong, nullable) UIView *selectedView;
-@property (nonatomic, strong, nullable) UIView *highlightView;
-@property (nonatomic, copy) NSString *currentDetails;
-+ (NSString *)descriptionForView:(UIView *)view;
-- (void)showSelectionPrompt;
-- (void)showSelectedView:(UIView *)view;
-- (void)showSelectedWebElement:(NSString *)details;
-@end
+@class PHInspectorViewController;
 
 @interface PHOverlayManager ()
-@property (nonatomic, weak, nullable) UIViewController *presentingViewController;
 @property (nonatomic, strong, nullable) PHInspectorViewController *inspectorViewController;
 @property (nonatomic, strong, nullable) UIWindow *inspectorWindow;
 @property (nonatomic, assign) BOOL selectionModeActive;
@@ -22,394 +12,304 @@
 @property (nonatomic, assign) CGFloat previousBorderWidth;
 @property (nonatomic, strong, nullable) UIColor *previousBorderColor;
 - (void)showHierarchy;
+- (void)restoreInspector;
+@end
+
+static NSString *PHFilterPath(void) {
+    static NSString *cachedPath;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSString *home = NSHomeDirectory();
+        NSDirectoryEnumerator *e = [NSFileManager.defaultManager enumeratorAtPath:home];
+        NSString *relative = nil;
+        while ((relative = [e nextObject])) {
+            if ([relative.lastPathComponent.lowercaseString isEqualToString:@"custom-filters.json"]) {
+                cachedPath = [home stringByAppendingPathComponent:relative];
+                break;
+            }
+        }
+        if (!cachedPath.length) cachedPath = [home stringByAppendingPathComponent:@"Documents/custom-filters.json"];
+    });
+    if (![[NSFileManager defaultManager] fileExistsAtPath:cachedPath]) {
+        NSString *home = NSHomeDirectory();
+        NSDirectoryEnumerator *e = [NSFileManager.defaultManager enumeratorAtPath:home];
+        NSString *relative = nil;
+        while ((relative = [e nextObject])) {
+            if ([relative.lastPathComponent.lowercaseString isEqualToString:@"custom-filters.json"]) {
+                cachedPath = [home stringByAppendingPathComponent:relative];
+                break;
+            }
+        }
+    }
+    return cachedPath;
+}
+
+static NSMutableArray *PHLoadFilters(void) {
+    NSData *data = [NSData dataWithContentsOfFile:PHFilterPath()];
+    if (!data) return [NSMutableArray array];
+    id json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
+    if ([json isKindOfClass:NSDictionary.class]) json = json[@"filters"];
+    return [json isKindOfClass:NSArray.class] ? [json mutableCopy] : [NSMutableArray array];
+}
+
+static BOOL PHWriteFilters(NSArray *filters) {
+    NSString *path = PHFilterPath();
+    [[NSFileManager defaultManager] createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"version": @1, @"filters": filters ?: @[] } options:0 error:nil];
+    return data && [data writeToFile:path atomically:YES];
+}
+
+static NSString *PHSelectorsJSON(NSArray *selectors) {
+    NSData *data = [NSJSONSerialization dataWithJSONObject:selectors ?: @[] options:0 error:nil];
+    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"[]";
+}
+
+static void PHApplyFilters(WKWebView *webView) {
+    if (!webView) return;
+    NSMutableArray *selectors = [NSMutableArray array];
+    for (NSDictionary *filter in PHLoadFilters()) {
+        NSString *selector = filter[@"selector"];
+        if ([selector isKindOfClass:NSString.class] && selector.length) [selectors addObject:selector];
+    }
+    if (!selectors.count) return;
+    NSString *json = PHSelectorsJSON(selectors);
+    NSString *script = [NSString stringWithFormat:@"(%@).forEach(function(s){try{document.querySelectorAll(s).forEach(function(e){if(e.getAttribute('data-projetoh-hidden')!=='1'){e.setAttribute('data-projetoh-hidden','1');e.setAttribute('data-projetoh-prev-display',e.style.display||'');e.style.display='none';}})}catch(e){}});", json];
+    [webView evaluateJavaScript:script completionHandler:nil];
+}
+
+static void PHHideSelector(WKWebView *webView, NSString *selector) {
+    if (!webView || !selector.length) return;
+    NSString *json = PHSelectorsJSON(@[selector]);
+    NSString *script = [NSString stringWithFormat:@"(%@).forEach(function(s){try{document.querySelectorAll(s).forEach(function(e){e.setAttribute('data-projetoh-hidden','1');e.setAttribute('data-projetoh-prev-display',e.style.display||'');e.style.display='none';})}catch(e){}});", json];
+    [webView evaluateJavaScript:script completionHandler:nil];
+}
+
+static void PHRestoreSelector(WKWebView *webView, NSString *selector) {
+    if (!webView || !selector.length) return;
+    NSString *json = PHSelectorsJSON(@[selector]);
+    NSString *script = [NSString stringWithFormat:@"(%@).forEach(function(s){try{document.querySelectorAll(s).forEach(function(e){e.style.display=e.getAttribute('data-projetoh-prev-display')||'';e.removeAttribute('data-projetoh-hidden');e.removeAttribute('data-projetoh-prev-display');})}catch(e){}});", json];
+    [webView evaluateJavaScript:script completionHandler:nil];
+}
+
+static NSMutableArray<NSString *> *PHPendingSelectors = nil;
+static NSTimer *PHApplyTimer = nil;
+
+@interface PHInspectorViewController : UIViewController
+@property (nonatomic, assign) BOOL selectionMode;
+@property (nonatomic, copy) NSString *currentDetails;
+@property (nonatomic, copy) NSString *currentSubtitle;
+@property (nonatomic, copy) NSString *detailsBeforeHierarchy;
+@property (nonatomic, copy) NSString *subtitleBeforeHierarchy;
+@property (nonatomic, assign) BOOL showingHierarchy;
+- (void)showSelectionPrompt;
+- (void)showSelectedWebElement:(NSString *)details;
+- (void)showSelectedView:(UIView *)view;
 @end
 
 @implementation PHInspectorViewController
 
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    self.view.backgroundColor = UIColor.clearColor;
-    [self showSelectionPrompt];
+- (void)viewDidLoad { [super viewDidLoad]; self.view.backgroundColor = UIColor.clearColor; [self showSelectionPrompt]; }
+
+- (UILabel *)label:(NSString *)text font:(UIFont *)font color:(UIColor *)color {
+    UILabel *l = [UILabel new]; l.translatesAutoresizingMaskIntoConstraints = NO; l.text = text ?: @""; l.font = font; l.textColor = color; l.numberOfLines = 0; return l;
 }
 
-- (UILabel *)labelWithText:(NSString *)text font:(UIFont *)font color:(UIColor *)color {
-    UILabel *label = [UILabel new];
-    label.translatesAutoresizingMaskIntoConstraints = NO;
-    label.text = text;
-    label.font = font;
-    label.textColor = color;
-    label.numberOfLines = 0;
-    return label;
+- (UIButton *)button:(NSString *)title action:(SEL)action {
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem]; b.translatesAutoresizingMaskIntoConstraints = NO; [b setTitle:title forState:UIControlStateNormal]; b.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold]; [b addTarget:self action:action forControlEvents:UIControlEventTouchUpInside]; return b;
 }
 
-- (void)clearSubviews {
-    for (UIView *view in self.view.subviews.copy) [view removeFromSuperview];
-}
+- (void)clear { for (UIView *v in self.view.subviews.copy) [v removeFromSuperview]; }
 
-- (UIView *)makePanel {
-    UIView *panel = [UIView new];
-    panel.translatesAutoresizingMaskIntoConstraints = NO;
-    panel.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.97];
-    panel.layer.cornerRadius = 18.0;
-    panel.layer.masksToBounds = YES;
-    return panel;
-}
-
-- (UIButton *)makeCloseButton {
-    UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
-    close.translatesAutoresizingMaskIntoConstraints = NO;
-    [close setTitle:@"Fechar" forState:UIControlStateNormal];
-    close.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
-    [close addTarget:self action:@selector(closeTapped) forControlEvents:UIControlEventTouchUpInside];
-    return close;
+- (UIView *)panel {
+    UIView *p = [UIView new]; p.translatesAutoresizingMaskIntoConstraints = NO; p.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.97]; p.layer.cornerRadius = 18.0; p.layer.masksToBounds = YES; return p;
 }
 
 - (void)showSelectionPrompt {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self clearSubviews];
-        self.selectionMode = YES;
-        UILabel *bubble = [self labelWithText:@"🔍  Toque no elemento que deseja inspecionar" font:[UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold] color:UIColor.whiteColor];
-        bubble.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.96];
-        bubble.layer.cornerRadius = 22.0;
-        bubble.layer.masksToBounds = YES;
-        bubble.textAlignment = NSTextAlignmentCenter;
+        [self clear]; self.selectionMode = YES; self.showingHierarchy = NO;
+        UILabel *bubble = [self label:@"Toque no elemento que deseja inspecionar" font:[UIFont systemFontOfSize:14 weight:UIFontWeightSemibold] color:UIColor.whiteColor];
+        bubble.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.96]; bubble.layer.cornerRadius = 22; bubble.layer.masksToBounds = YES; bubble.textAlignment = NSTextAlignmentCenter;
         [self.view addSubview:bubble];
-        [NSLayoutConstraint activateConstraints:@[
-            [bubble.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-            [bubble.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:18.0],
-            [bubble.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:20.0],
-            [bubble.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-20.0],
-            [bubble.heightAnchor constraintEqualToConstant:44.0],
-            [bubble.widthAnchor constraintEqualToConstant:330.0]
-        ]];
+        [NSLayoutConstraint activateConstraints:@[[bubble.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],[bubble.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:18],[bubble.widthAnchor constraintEqualToConstant:320],[bubble.heightAnchor constraintEqualToConstant:44]]];
     });
 }
 
-- (void)showPanelWithSubtitle:(NSString *)subtitle details:(NSString *)details {
+- (void)showInspectorDetails:(NSString *)details subtitle:(NSString *)subtitle {
     dispatch_async(dispatch_get_main_queue(), ^{
-        self.selectionMode = NO;
-        self.currentDetails = details ?: @"";
-        [self clearSubviews];
-        UIView *panel = [self makePanel];
-        UILabel *title = [self labelWithText:@"ProjetoH Inspector" font:[UIFont boldSystemFontOfSize:21.0] color:UIColor.whiteColor];
-        UILabel *subtitleLabel = [self labelWithText:subtitle font:[UIFont systemFontOfSize:14.0] color:[UIColor colorWithWhite:0.72 alpha:1.0]];
-        UILabel *detailsLabel = [self labelWithText:details font:[UIFont monospacedSystemFontOfSize:13.0 weight:UIFontWeightRegular] color:[UIColor colorWithWhite:0.86 alpha:1.0]];
-        UIButton *copyButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        copyButton.translatesAutoresizingMaskIntoConstraints = NO;
-        [copyButton setTitle:@"Copiar" forState:UIControlStateNormal];
-        copyButton.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
-        [copyButton addTarget:self action:@selector(copyTapped) forControlEvents:UIControlEventTouchUpInside];
-        UIButton *close = [self makeCloseButton];
-        UIButton *hierarchy = [UIButton buttonWithType:UIButtonTypeSystem];
-        hierarchy.translatesAutoresizingMaskIntoConstraints = NO;
-        [hierarchy setTitle:@"Hierarquia" forState:UIControlStateNormal];
-        hierarchy.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
-        [hierarchy addTarget:self action:@selector(hierarchyTapped) forControlEvents:UIControlEventTouchUpInside];
-        [panel addSubview:title];
-        [panel addSubview:subtitleLabel];
-        [panel addSubview:detailsLabel];
-        [panel addSubview:hierarchy];
-        [panel addSubview:copyButton];
-        [panel addSubview:close];
-        [self.view addSubview:panel];
-        [NSLayoutConstraint activateConstraints:@[
-            [panel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-            [panel.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
-            [panel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:12.0],
-            [panel.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-12.0],
-            [panel.widthAnchor constraintEqualToConstant:350.0],
-            [panel.heightAnchor constraintEqualToConstant:430.0],
-            [title.topAnchor constraintEqualToAnchor:panel.topAnchor constant:22.0],
-            [title.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
-            [subtitleLabel.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:5.0],
-            [subtitleLabel.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
-            [detailsLabel.topAnchor constraintEqualToAnchor:subtitleLabel.bottomAnchor constant:20.0],
-            [detailsLabel.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
-            [detailsLabel.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],
-            [detailsLabel.bottomAnchor constraintLessThanOrEqualToAnchor:hierarchy.topAnchor constant:-10.0],
-            [hierarchy.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:22.0],
-            [hierarchy.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],
-            [copyButton.centerXAnchor constraintEqualToAnchor:panel.centerXAnchor],
-            [copyButton.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0],
-            [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-22.0],
-            [close.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-20.0]
-        ]];
+        self.selectionMode = NO; self.showingHierarchy = NO; self.currentDetails = details ?: @""; self.currentSubtitle = subtitle ?: @"Elemento Web selecionado";
+        [self render:NO];
     });
 }
+
+- (void)showSelectedWebElement:(NSString *)details { [self showInspectorDetails:details subtitle:@"Elemento Web selecionado"]; }
 
 - (void)showSelectedView:(UIView *)view {
-    [self showPanelWithSubtitle:@"Elemento nativo selecionado" details:[PHInspectorViewController descriptionForView:view]];
+    CGRect r = view.frame;
+    NSString *d = [NSString stringWithFormat:@"Classe: %@\n\nRect:\n  x: %.1f\n  y: %.1f\n  largura: %.1f\n  altura: %.1f\n\nTag: %ld\nHidden: %@\nAlpha: %.2f", NSStringFromClass(view.class), r.origin.x, r.origin.y, r.size.width, r.size.height, (long)view.tag, view.hidden ? @"SIM" : @"NÃO", view.alpha];
+    [self showInspectorDetails:d subtitle:@"Elemento nativo selecionado"];
 }
 
-- (void)showSelectedWebElement:(NSString *)details {
-    [self showPanelWithSubtitle:@"Elemento Web selecionado" details:details];
+- (void)render:(BOOL)hierarchyMode {
+    [self clear];
+    UIView *p = [self panel]; [self.view addSubview:p];
+    UILabel *title = [self label:@"ProjetoH Inspector" font:[UIFont boldSystemFontOfSize:21] color:UIColor.whiteColor];
+    UILabel *subtitle = [self label:(hierarchyMode ? @"Hierarquia DOM" : self.currentSubtitle) font:[UIFont systemFontOfSize:14] color:[UIColor colorWithWhite:0.72 alpha:1]];
+    UIScrollView *scroll = [UIScrollView new]; scroll.translatesAutoresizingMaskIntoConstraints = NO; scroll.backgroundColor = [UIColor colorWithWhite:0.055 alpha:1]; scroll.layer.cornerRadius = 12; scroll.alwaysBounceVertical = YES;
+    UILabel *content = [self label:(hierarchyMode ? self.currentDetails : self.currentDetails) font:[UIFont monospacedSystemFontOfSize:12.5 weight:UIFontWeightRegular] color:[UIColor colorWithWhite:0.88 alpha:1]];
+    [scroll addSubview:content];
+    UIButton *left = [self button:(hierarchyMode ? @"Voltar" : @"Hierarquia") action:(hierarchyMode ? @selector(backTapped) : @selector(hierarchyTapped))];
+    UIButton *copy = [self button:@"Copiar" action:@selector(copyTapped)]; UIButton *close = [self button:@"Fechar" action:@selector(closeTapped)];
+    UIButton *hide = [self button:@"Ocultar" action:@selector(hideTapped)]; UIButton *hidden = [self button:@"Ocultos" action:@selector(hiddenTapped)]; UIButton *save = [self button:@"Salvar" action:@selector(saveTapped)];
+    save.hidden = PHPendingSelectors.count == 0;
+    for (UIView *v in @[title,subtitle,scroll,left,copy,close,hide,hidden,save]) [p addSubview:v];
+    [NSLayoutConstraint activateConstraints:@[
+        [p.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],[p.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],[p.widthAnchor constraintEqualToConstant:360],[p.heightAnchor constraintEqualToConstant:500],
+        [title.topAnchor constraintEqualToAnchor:p.topAnchor constant:22],[title.leadingAnchor constraintEqualToAnchor:p.leadingAnchor constant:22],
+        [subtitle.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:5],[subtitle.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
+        [scroll.topAnchor constraintEqualToAnchor:subtitle.bottomAnchor constant:18],[scroll.leadingAnchor constraintEqualToAnchor:p.leadingAnchor constant:18],[scroll.trailingAnchor constraintEqualToAnchor:p.trailingAnchor constant:-18],[scroll.heightAnchor constraintEqualToConstant:326],
+        [content.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],[content.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:16],[content.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-16],[content.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-16],[content.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32],
+        [left.leadingAnchor constraintEqualToAnchor:p.leadingAnchor constant:18],[left.bottomAnchor constraintEqualToAnchor:p.bottomAnchor constant:-62],[left.widthAnchor constraintEqualToConstant:100],
+        [copy.centerXAnchor constraintEqualToAnchor:p.centerXAnchor],[copy.bottomAnchor constraintEqualToAnchor:p.bottomAnchor constant:-62],[copy.widthAnchor constraintEqualToConstant:100],
+        [close.trailingAnchor constraintEqualToAnchor:p.trailingAnchor constant:-18],[close.bottomAnchor constraintEqualToAnchor:p.bottomAnchor constant:-62],[close.widthAnchor constraintEqualToConstant:100],
+        [hide.leadingAnchor constraintEqualToAnchor:p.leadingAnchor constant:18],[hide.bottomAnchor constraintEqualToAnchor:p.bottomAnchor constant:-14],[hide.widthAnchor constraintEqualToConstant:100],
+        [hidden.centerXAnchor constraintEqualToAnchor:p.centerXAnchor],[hidden.bottomAnchor constraintEqualToAnchor:p.bottomAnchor constant:-14],[hidden.widthAnchor constraintEqualToConstant:100],
+        [save.trailingAnchor constraintEqualToAnchor:p.trailingAnchor constant:-18],[save.bottomAnchor constraintEqualToAnchor:p.bottomAnchor constant:-14],[save.widthAnchor constraintEqualToConstant:100]
+    ]];
 }
 
-- (void)hierarchyTapped {
-    [[PHOverlayManager sharedManager] showHierarchy];
-}
-
-+ (NSString *)descriptionForView:(UIView *)view {
-    CGRect frame = view.frame;
-    return [NSString stringWithFormat:@"Classe: %@\n\nFrame:\n  x: %.1f\n  y: %.1f\n  largura: %.1f\n  altura: %.1f\n\nTag: %ld\nHidden: %@\nAlpha: %.2f\nInteração: %@", NSStringFromClass(view.class), frame.origin.x, frame.origin.y, frame.size.width, frame.size.height, (long)view.tag, view.hidden ? @"SIM" : @"NÃO", view.alpha, view.userInteractionEnabled ? @"SIM" : @"NÃO"];
-}
-
-- (void)copyTapped {
-    UIPasteboard.generalPasteboard.string = self.currentDetails ?: @"";
-}
-
+- (void)hierarchyTapped { self.detailsBeforeHierarchy = self.currentDetails; self.subtitleBeforeHierarchy = self.currentSubtitle; [[PHOverlayManager sharedManager] performSelector:@selector(showHierarchy)]; }
+- (void)backTapped { [[PHOverlayManager sharedManager] performSelector:@selector(restoreInspector)]; }
+- (void)copyTapped { UIPasteboard.generalPasteboard.string = self.currentDetails ?: @""; }
 - (void)closeTapped { [[PHOverlayManager sharedManager] dismissOverlay]; }
+- (void)hideTapped { [[PHOverlayManager sharedManager] performSelector:@selector(hideSelectedElement)]; }
+- (void)hiddenTapped { [[PHOverlayManager sharedManager] performSelector:@selector(showHiddenElements)]; }
+- (void)saveTapped { [[PHOverlayManager sharedManager] performSelector:@selector(savePendingFilters)]; }
 @end
 
 @implementation PHOverlayManager
 
-+ (instancetype)sharedManager {
-    static PHOverlayManager *manager;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ manager = [PHOverlayManager new]; });
-    return manager;
-}
-
++ (instancetype)sharedManager { static PHOverlayManager *m; static dispatch_once_t once; dispatch_once(&once, ^{ m = [PHOverlayManager new]; }); return m; }
 - (void)presentTestOverlayIfNeeded { [self startSelectionMode]; }
-
-- (UIViewController *)topViewControllerFrom:(UIViewController *)root {
-    UIViewController *current = root;
-    while (current.presentedViewController != nil && !current.isBeingDismissed) current = current.presentedViewController;
-    if ([current isKindOfClass:[UINavigationController class]]) {
-        UIViewController *visible = [(UINavigationController *)current visibleViewController];
-        if (visible != nil && visible != current) return [self topViewControllerFrom:visible];
-    }
-    if ([current isKindOfClass:[UITabBarController class]]) {
-        UIViewController *selected = [(UITabBarController *)current selectedViewController];
-        if (selected != nil && selected != current) return [self topViewControllerFrom:selected];
-    }
-    return current;
-}
+- (void)presentInspectorIfNeeded { [self startSelectionMode]; }
 
 - (UIWindow *)activeKeyWindow {
-    for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
-        if (![candidate isKindOfClass:[UIWindowScene class]]) continue;
-        UIWindowScene *scene = (UIWindowScene *)candidate;
-        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
-        for (UIWindow *window in scene.windows.reverseObjectEnumerator) if (window.isKeyWindow && !window.hidden && window.alpha > 0.0) return window;
-        for (UIWindow *window in scene.windows.reverseObjectEnumerator) if (!window.hidden && window.alpha > 0.0 && window.rootViewController != nil) return window;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class] || scene.activationState != UISceneActivationStateForegroundActive) continue;
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        for (UIWindow *w in ws.windows.reverseObjectEnumerator) if (w.isKeyWindow && !w.hidden && w.alpha > 0) return w;
+        for (UIWindow *w in ws.windows.reverseObjectEnumerator) if (!w.hidden && w.alpha > 0 && w.rootViewController) return w;
     }
     return nil;
 }
 
 - (void)installInspectorWindowIfNeeded {
-    if (self.inspectorWindow != nil) return;
-    UIWindow *appWindow = [self activeKeyWindow];
-    if (appWindow == nil || appWindow.windowScene == nil) return;
-    PHInspectorViewController *controller = [PHInspectorViewController new];
-    UIWindow *window = [[UIWindow alloc] initWithWindowScene:appWindow.windowScene];
-    window.frame = appWindow.bounds;
-    window.windowLevel = UIWindowLevelAlert + 1.0;
-    window.backgroundColor = UIColor.clearColor;
-    window.rootViewController = controller;
-    window.hidden = NO;
-    window.userInteractionEnabled = NO;
-    self.inspectorViewController = controller;
-    self.inspectorWindow = window;
+    if (self.inspectorWindow) return;
+    UIWindow *app = [self activeKeyWindow]; if (!app || !app.windowScene) return;
+    PHInspectorViewController *vc = [PHInspectorViewController new];
+    UIWindow *w = [[UIWindow alloc] initWithWindowScene:app.windowScene]; w.frame = app.bounds; w.windowLevel = UIWindowLevelAlert + 1; w.backgroundColor = UIColor.clearColor; w.rootViewController = vc; w.hidden = NO; w.userInteractionEnabled = NO;
+    self.inspectorViewController = vc; self.inspectorWindow = w;
 }
 
-- (void)presentInspectorIfNeeded { [self startSelectionMode]; }
-
 - (void)startSelectionMode {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self installInspectorWindowIfNeeded];
-        if (self.inspectorWindow == nil) return;
-        self.selectionModeActive = YES;
-        [self.inspectorViewController showSelectionPrompt];
-        self.inspectorWindow.userInteractionEnabled = NO;
-    });
+    dispatch_async(dispatch_get_main_queue(), ^{ [self installInspectorWindowIfNeeded]; if (!self.inspectorWindow) return; self.selectionModeActive = YES; self.inspectorWindow.userInteractionEnabled = NO; [self.inspectorViewController showSelectionPrompt]; });
 }
 
 - (UIView *)deepestViewFrom:(UIView *)view point:(CGPoint)point {
-    if (view == nil || view.hidden || view.alpha <= 0.01) return nil;
-    if (![view pointInside:point withEvent:nil]) return nil;
-    for (UIView *subview in view.subviews.reverseObjectEnumerator) {
-        CGPoint subPoint = [subview convertPoint:point fromView:view];
-        UIView *deepest = [self deepestViewFrom:subview point:subPoint];
-        if (deepest != nil) return deepest;
-    }
+    if (!view || view.hidden || view.alpha <= .01 || ![view pointInside:point withEvent:nil]) return nil;
+    for (UIView *sub in view.subviews.reverseObjectEnumerator) { CGPoint q = [sub convertPoint:point fromView:view]; UIView *d = [self deepestViewFrom:sub point:q]; if (d) return d; }
     return view;
 }
-
-- (UIView *)deepestViewAtPoint:(CGPoint)point inWindow:(UIWindow *)window {
-    if (window == nil || window.hidden || window.alpha <= 0.0) return nil;
-    return [self deepestViewFrom:window point:point];
-}
-
-- (WKWebView *)webViewContainingView:(UIView *)view {
-    UIView *cursor = view;
-    while (cursor != nil) {
-        if ([cursor isKindOfClass:[WKWebView class]]) return (WKWebView *)cursor;
-        cursor = cursor.superview;
-    }
-    return nil;
-}
+- (UIView *)deepestViewAtPoint:(CGPoint)point inWindow:(UIWindow *)window { return [self deepestViewFrom:window point:point]; }
+- (WKWebView *)webViewContainingView:(UIView *)view { for (UIView *v=view; v; v=v.superview) if ([v isKindOfClass:WKWebView.class]) return (WKWebView *)v; return nil; }
 
 - (void)highlightWebElementInWebView:(WKWebView *)webView x:(CGFloat)x y:(CGFloat)y {
     self.highlightedWebView = webView;
-    NSString *script = [NSString stringWithFormat:@"(function(){var e=document.elementFromPoint(%0.3f,%0.3f);if(!e)return null;var old=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(old){old.style.outline=old.getAttribute('data-projetoh-prev-outline')||'';old.removeAttribute('data-projetoh-selected');old.removeAttribute('data-projetoh-prev-outline');}e.setAttribute('data-projetoh-selected','1');e.setAttribute('data-projetoh-prev-outline',e.style.outline||'');e.style.outline='3px solid #007AFF';return JSON.stringify({tag:e.tagName.toLowerCase(),id:e.id||'',className:typeof e.className==='string'?e.className:'',text:(e.innerText||e.textContent||'').trim().replace(/\\s+/g,' ').slice(0,180),href:e.href||'',type:e.getAttribute('type')||'',rect:(function(r){return {x:r.x,y:r.y,width:r.width,height:r.height};})(e.getBoundingClientRect())});})()", x, y];
+    NSString *script = [NSString stringWithFormat:@"(function(){var e=document.elementFromPoint(%0.3f,%0.3f);if(!e)return null;var old=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(old){old.style.outline=old.getAttribute('data-projetoh-prev-outline')||'';old.removeAttribute('data-projetoh-selected');old.removeAttribute('data-projetoh-prev-outline');}e.setAttribute('data-projetoh-selected','1');e.setAttribute('data-projetoh-prev-outline',e.style.outline||'');e.style.outline='3px solid #007AFF';function p(n){if(n.id)return '#'+CSS.escape(n.id);var a=[];while(n&&n.nodeType===1&&n!==document.body){var q=n.parentElement;if(!q)break;var same=[...q.children].filter(function(c){return c.tagName===n.tagName;});a.unshift(n.tagName.toLowerCase()+':nth-of-type('+(same.indexOf(n)+1)+')');n=q;}return a.join(' > ');}var r=e.getBoundingClientRect();return JSON.stringify({tag:e.tagName.toLowerCase(),id:e.id||'',className:typeof e.className==='string'?e.className:'',text:(e.innerText||e.textContent||'').trim().replace(/\\s+/g,' ').slice(0,180),href:e.href||'',type:e.getAttribute('type')||'',selector:p(e),rect:{x:r.x,y:r.y,width:r.width,height:r.height}});})()", x, y];
     [webView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.selectionModeActive = NO;
-            self.inspectorWindow.userInteractionEnabled = YES;
-            if (error != nil || ![result isKindOfClass:[NSString class]]) {
-                [self selectView:[self deepestViewAtPoint:CGPointMake(x, y) inWindow:webView.window]];
-                return;
-            }
-            NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding];
-            NSDictionary *info = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
-            if (![info isKindOfClass:[NSDictionary class]]) {
-                [self selectView:[self deepestViewAtPoint:CGPointMake(x, y) inWindow:webView.window]];
-                return;
-            }
-            NSString *tag = info[@"tag"] ?: @"?";
-            NSString *elementID = info[@"id"] ?: @"";
-            NSString *className = info[@"className"] ?: @"";
-            NSString *text = info[@"text"] ?: @"";
-            NSString *href = info[@"href"] ?: @"";
-            NSString *type = info[@"type"] ?: @"";
-            NSDictionary *rect = info[@"rect"];
-            NSMutableString *details = [NSMutableString stringWithFormat:@"HTML: <%@>", tag];
-            if (elementID.length) [details appendFormat:@"\nID: %@", elementID];
-            if (className.length) [details appendFormat:@"\nClasse: %@", className];
-            if (type.length) [details appendFormat:@"\nTipo: %@", type];
-            if (text.length) [details appendFormat:@"\nTexto: %@", text];
-            if (href.length) [details appendFormat:@"\nLink: %@", href];
-            if ([rect isKindOfClass:[NSDictionary class]]) {
-                [details appendFormat:@"\n\nRect:\n  x: %.1f\n  y: %.1f\n  largura: %.1f\n  altura: %.1f", [rect[@"x"] doubleValue], [rect[@"y"] doubleValue], [rect[@"width"] doubleValue], [rect[@"height"] doubleValue]];
-            }
-            [self.inspectorViewController showSelectedWebElement:details];
+            self.selectionModeActive = NO; self.inspectorWindow.userInteractionEnabled = YES;
+            if (error || ![result isKindOfClass:NSString.class]) { [self selectView:[self deepestViewAtPoint:CGPointMake(x,y) inWindow:webView.window]]; return; }
+            NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding]; NSDictionary *info = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+            if (![info isKindOfClass:NSDictionary.class]) { [self selectView:[self deepestViewAtPoint:CGPointMake(x,y) inWindow:webView.window]]; return; }
+            NSMutableString *d = [NSMutableString stringWithFormat:@"HTML: <%@>", info[@"tag"] ?: @"?"];
+            if ([info[@"id"] length]) [d appendFormat:@"\nID: %@", info[@"id"]]; if ([info[@"className"] length]) [d appendFormat:@"\nClasse: %@", info[@"className"]]; if ([info[@"type"] length]) [d appendFormat:@"\nTipo: %@", info[@"type"]]; if ([info[@"text"] length]) [d appendFormat:@"\nTexto: %@", info[@"text"]]; if ([info[@"href"] length]) [d appendFormat:@"\nLink: %@", info[@"href"]];
+            NSDictionary *r = info[@"rect"]; if ([r isKindOfClass:NSDictionary.class]) [d appendFormat:@"\n\nRect:\n  x: %.1f\n  y: %.1f\n  largura: %.1f\n  altura: %.1f", [r[@"x"] doubleValue],[r[@"y"] doubleValue],[r[@"width"] doubleValue],[r[@"height"] doubleValue]];
+            [self.inspectorViewController showSelectedWebElement:d];
         });
     }];
 }
 
 - (void)showHierarchy {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.highlightedWebView != nil) {
-            NSString *script = @"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(!e)return JSON.stringify([]);var out=[];var n=e;while(n&&n.nodeType===1&&out.length<12){var s=n.tagName.toLowerCase();if(n.id)s+='#'+n.id;if(typeof n.className==='string'&&n.className.trim())s+='.'+n.className.trim().split(/\\s+/).slice(0,3).join('.');out.push(s);n=n.parentElement;}return JSON.stringify(out);})()";
-            [self.highlightedWebView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (error != nil || ![result isKindOfClass:[NSString class]]) {
-                        [self.inspectorViewController showSelectedWebElement:@"Hierarquia Web\n\nNão foi possível obter a árvore DOM."];
-                        return;
-                    }
-                    NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding];
-                    NSArray *nodes = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
-                    NSMutableString *details = [NSMutableString stringWithString:@"Árvore DOM (elemento → ancestrais)\n\n"];
-                    if (![nodes isKindOfClass:[NSArray class]] || nodes.count == 0) {
-                        [details appendString:@"Nenhum elemento selecionado."];
-                    } else {
-                        for (NSUInteger i = 0; i < nodes.count; i++) {
-                            NSString *node = [nodes[i] isKindOfClass:[NSString class]] ? nodes[i] : @"?";
-                            [details appendFormat:@"%@%@ %@\n", i == 0 ? @"▶" : @"↳", i == 0 ? @"" : @" ", node];
-                        }
-                    }
-                    [self.inspectorViewController showSelectedWebElement:details];
-                });
-            }];
-            return;
-        }
+    if (!self.highlightedWebView) return;
+    NSString *script = @"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(!e)return JSON.stringify([]);var out=[];var n=e;while(n&&n.nodeType===1&&out.length<16){var s=n.tagName.toLowerCase();if(n.id)s+='#'+n.id;if(typeof n.className==='string'&&n.className.trim())s+='.'+n.className.trim().split(/\\s+/).slice(0,3).join('.');out.push(s);n=n.parentElement;}return JSON.stringify(out);})()";
+    [self.highlightedWebView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (error || ![result isKindOfClass:NSString.class]) { self.inspectorViewController.showingHierarchy = YES; self.inspectorViewController.currentDetails = @"Não foi possível obter a árvore DOM."; [self.inspectorViewController render:YES]; return; }
+            NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding]; NSArray *nodes = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil; NSMutableString *d = [NSMutableString stringWithString:@"Árvore DOM (elemento → ancestrais)\n\n"];
+            if (![nodes isKindOfClass:NSArray.class] || !nodes.count) [d appendString:@"Nenhum elemento selecionado."]; else for (NSUInteger i=0;i<nodes.count;i++) [d appendFormat:@"%@ %@\n", i==0?@"▶":@"↳", [nodes[i] isKindOfClass:NSString.class]?nodes[i]:@"?"];
+            self.inspectorViewController.currentDetails = d; self.inspectorViewController.showingHierarchy = YES; [self.inspectorViewController render:YES];
+        });
+    }];
+}
 
-        UIView *view = self.highlightedView;
-        if (view == nil) {
-            [self.inspectorViewController showSelectedWebElement:@"Hierarquia\n\nNenhum elemento selecionado."];
-            return;
-        }
-        NSMutableString *details = [NSMutableString stringWithString:@"Hierarquia nativa (view → superviews)\n\n"];
-        UIView *cursor = view;
-        NSUInteger index = 0;
-        while (cursor != nil && index < 12) {
-            [details appendFormat:@"%@ %@\n", index == 0 ? @"▶" : @"↳", NSStringFromClass(cursor.class)];
-            cursor = cursor.superview;
-            index++;
-        }
-        [self.inspectorViewController showSelectedWebElement:details];
-    });
+- (void)restoreInspector {
+    self.inspectorViewController.showingHierarchy = NO;
+    self.inspectorViewController.currentDetails = self.inspectorViewController.detailsBeforeHierarchy ?: self.inspectorViewController.currentDetails;
+    self.inspectorViewController.currentSubtitle = self.inspectorViewController.subtitleBeforeHierarchy ?: @"Elemento Web selecionado";
+    [self.inspectorViewController render:NO];
 }
 
 - (void)processInspectionEvent:(UIEvent *)event {
-    if (!self.selectionModeActive || event == nil || ![event respondsToSelector:@selector(allTouches)]) return;
-    UITouch *candidate = nil;
-    for (UITouch *touch in event.allTouches) {
-        if (touch.phase == UITouchPhaseBegan && touch.window != self.inspectorWindow) {
-            candidate = touch;
-            break;
-        }
-    }
-    if (candidate == nil) return;
-    UIWindow *window = candidate.window;
-    if (window == nil || window == self.inspectorWindow) return;
-    CGPoint point = [candidate locationInView:window];
-    UIView *selected = [self deepestViewAtPoint:point inWindow:window];
-    if (selected == nil) selected = candidate.view;
-    if (selected == nil || selected.window == self.inspectorWindow) return;
-
-    WKWebView *webView = [self webViewContainingView:selected];
-    if (webView != nil) {
-        CGPoint webPoint = [webView convertPoint:point fromView:window];
-        CGFloat width = MAX(webView.bounds.size.width, 1.0);
-        CGFloat height = MAX(webView.bounds.size.height, 1.0);
-        NSString *sizeScript = @"JSON.stringify({w:window.innerWidth,h:window.innerHeight})";
-        [webView evaluateJavaScript:sizeScript completionHandler:^(id result, NSError *error) {
-            CGFloat cssWidth = width;
-            CGFloat cssHeight = height;
-            if ([result isKindOfClass:[NSString class]]) {
-                NSData *data = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding];
-                NSDictionary *size = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
-                if ([size isKindOfClass:[NSDictionary class]]) {
-                    cssWidth = MAX([size[@"w"] doubleValue], 1.0);
-                    cssHeight = MAX([size[@"h"] doubleValue], 1.0);
-                }
-            }
-            CGFloat x = webPoint.x * cssWidth / width;
-            CGFloat y = webPoint.y * cssHeight / height;
-            [self highlightWebElementInWebView:webView x:x y:y];
-        }];
-        return;
+    if (!self.selectionModeActive || ![event respondsToSelector:@selector(allTouches)]) return;
+    UITouch *touch = nil; for (UITouch *t in event.allTouches) if (t.phase == UITouchPhaseBegan && t.window != self.inspectorWindow) { touch=t; break; }
+    if (!touch || !touch.window) return; UIWindow *window=touch.window; CGPoint point=[touch locationInView:window]; UIView *selected=[self deepestViewAtPoint:point inWindow:window]; if (!selected) selected=touch.view; if (!selected || selected.window==self.inspectorWindow) return;
+    WKWebView *web=[self webViewContainingView:selected];
+    if (web) {
+        CGPoint wp=[web convertPoint:point fromView:window]; CGFloat ww=MAX(web.bounds.size.width,1), wh=MAX(web.bounds.size.height,1);
+        [web evaluateJavaScript:@"JSON.stringify({w:window.innerWidth,h:window.innerHeight})" completionHandler:^(id result,NSError *error){ CGFloat cw=ww,ch=wh; if([result isKindOfClass:NSString.class]){NSData *data=[result dataUsingEncoding:NSUTF8StringEncoding];NSDictionary *s=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;if([s isKindOfClass:NSDictionary.class]){cw=MAX([s[@"w"] doubleValue],1);ch=MAX([s[@"h"] doubleValue],1);}} [self highlightWebElementInWebView:web x:wp.x*cw/ww y:wp.y*ch/wh]; }]; return;
     }
     [self selectView:selected];
 }
 
 - (void)selectView:(UIView *)view {
-    if (view == nil) return;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        self.selectionModeActive = NO;
-        if (self.highlightedView != nil) {
-            self.highlightedView.layer.borderWidth = self.previousBorderWidth;
-            self.highlightedView.layer.borderColor = self.previousBorderColor.CGColor;
-        }
-        self.highlightedView = view;
-        self.previousBorderWidth = view.layer.borderWidth;
-        self.previousBorderColor = view.layer.borderColor ? [UIColor colorWithCGColor:view.layer.borderColor] : nil;
-        view.layer.borderWidth = 2.0;
-        view.layer.borderColor = [UIColor systemBlueColor].CGColor;
-        self.inspectorWindow.userInteractionEnabled = YES;
-        [self.inspectorViewController showSelectedView:view];
-    });
+    if (!view) return; dispatch_async(dispatch_get_main_queue(), ^{ self.selectionModeActive=NO; if(self.highlightedView){self.highlightedView.layer.borderWidth=self.previousBorderWidth;self.highlightedView.layer.borderColor=self.previousBorderColor.CGColor;} self.highlightedView=view; self.previousBorderWidth=view.layer.borderWidth; self.previousBorderColor=view.layer.borderColor?[UIColor colorWithCGColor:view.layer.borderColor]:nil; view.layer.borderWidth=2; view.layer.borderColor=UIColor.systemBlueColor.CGColor; self.inspectorWindow.userInteractionEnabled=YES; [self.inspectorViewController showSelectedView:view]; });
+}
+
+- (void)hideSelectedElement {
+    WKWebView *web=self.highlightedWebView; if(!web) return;
+    [web evaluateJavaScript:@"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(!e)return '{}';function p(n){if(n.id)return '#'+CSS.escape(n.id);var a=[];while(n&&n.nodeType===1&&n!==document.body){var q=n.parentElement;if(!q)break;var same=[...q.children].filter(function(c){return c.tagName===n.tagName;});a.unshift(n.tagName.toLowerCase()+':nth-of-type('+(same.indexOf(n)+1)+')');n=q;}return a.join(' > ');}return JSON.stringify({selector:p(e)});})()" completionHandler:^(id result,NSError *error){
+        if(error||![result isKindOfClass:NSString.class]) return; NSData *data=[result dataUsingEncoding:NSUTF8StringEncoding]; NSDictionary *info=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil; NSString *selector=info[@"selector"]; if(!selector.length)return;
+        if(!PHPendingSelectors) PHPendingSelectors=[NSMutableArray array]; if(![PHPendingSelectors containsObject:selector])[PHPendingSelectors addObject:selector]; PHHideSelector(web,selector); dispatch_async(dispatch_get_main_queue(), ^{ [self.inspectorViewController render:self.inspectorViewController.showingHierarchy]; });
+    }];
+}
+
+- (void)savePendingFilters {
+    if(!PHPendingSelectors.count) return; NSMutableArray *filters=PHLoadFilters();
+    for(NSString *selector in PHPendingSelectors){ BOOL exists=NO; for(NSDictionary *f in filters) if([f[@"selector"] isEqualToString:selector]){exists=YES;break;} if(!exists)[filters addObject:@{ @"selector":selector }]; }
+    if(PHWriteFilters(filters)){ [PHPendingSelectors removeAllObjects]; [self.inspectorViewController render:self.inspectorViewController.showingHierarchy]; PHApplyFilters(self.highlightedWebView); }
+}
+
+- (void)showHiddenElements {
+    NSArray *filters=PHLoadFilters(); UIViewController *vc=self.inspectorViewController; if(!vc)return;
+    UIAlertController *a=[UIAlertController alertControllerWithTitle:@"Elementos ocultos" message:[NSString stringWithFormat:@"%lu item(ns) em custom-filters.json",(unsigned long)filters.count] preferredStyle:UIAlertControllerStyleAlert];
+    for(NSDictionary *f in filters){ NSString *selector=f[@"selector"]?:@""; NSString *shortS=selector.length>90?[[selector substringToIndex:90]stringByAppendingString:@"…"]:selector; [a addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Reativar: %@",shortS] style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action){ NSMutableArray *cur=PHLoadFilters(); NSIndexSet *idx=[cur indexesOfObjectsPassingTest:^BOOL(NSDictionary *item,NSUInteger i,BOOL *stop){return [item[@"selector"] isEqualToString:selector];}]; [cur removeObjectsAtIndexes:idx]; PHWriteFilters(cur); PHRestoreSelector(self.highlightedWebView,selector); }]]; }
+    if(filters.count)[a addAction:[UIAlertAction actionWithTitle:@"Reativar todos" style:UIAlertActionStyleDestructive handler:^(__unused UIAlertAction *action){ for(NSDictionary *f in PHLoadFilters()) PHRestoreSelector(self.highlightedWebView,f[@"selector"]); PHWriteFilters(@[]); }]];
+    [a addAction:[UIAlertAction actionWithTitle:@"Fechar" style:UIAlertActionStyleCancel handler:nil]]; [vc presentViewController:a animated:YES completion:nil];
+}
+
+- (void)applyKnownWebViews {
+    if(!PHLoadFilters().count)return;
+    for(UIScene *scene in UIApplication.sharedApplication.connectedScenes){if(![scene isKindOfClass:UIWindowScene.class])continue;for(UIWindow *w in ((UIWindowScene *)scene).windows){if(w.hidden||w.alpha<=0)continue;NSMutableArray *stack=[NSMutableArray arrayWithObject:w];while(stack.count){UIView *v=stack.lastObject;[stack removeLastObject];if([v isKindOfClass:WKWebView.class])PHApplyFilters((WKWebView *)v);[stack addObjectsFromArray:v.subviews];}}}
 }
 
 - (void)dismissOverlay {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.highlightedView != nil) {
-            self.highlightedView.layer.borderWidth = self.previousBorderWidth;
-            self.highlightedView.layer.borderColor = self.previousBorderColor.CGColor;
-        }
-        if (self.highlightedWebView != nil) {
-            [self.highlightedWebView evaluateJavaScript:@"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(e){e.style.outline=e.getAttribute('data-projetoh-prev-outline')||'';e.removeAttribute('data-projetoh-selected');e.removeAttribute('data-projetoh-prev-outline');}})();" completionHandler:nil];
-        }
-        self.selectionModeActive = NO;
-        self.inspectorWindow.hidden = YES;
-        self.inspectorWindow = nil;
-        self.inspectorViewController = nil;
-        self.highlightedView = nil;
-        self.highlightedWebView = nil;
-        self.previousBorderColor = nil;
-        self.previousBorderWidth = 0.0;
-    });
+    dispatch_async(dispatch_get_main_queue(), ^{ if(self.highlightedView){self.highlightedView.layer.borderWidth=self.previousBorderWidth;self.highlightedView.layer.borderColor=self.previousBorderColor.CGColor;} if(self.highlightedWebView)[self.highlightedWebView evaluateJavaScript:@"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(e){e.style.outline=e.getAttribute('data-projetoh-prev-outline')||'';e.removeAttribute('data-projetoh-selected');e.removeAttribute('data-projetoh-prev-outline');}})();" completionHandler:nil]; self.selectionModeActive=NO;self.inspectorWindow.hidden=YES;self.inspectorWindow=nil;self.inspectorViewController=nil;self.highlightedView=nil;self.highlightedWebView=nil;self.previousBorderColor=nil;self.previousBorderWidth=0; });
 }
 @end
+
+__attribute__((constructor)) static void PHInit(void) {
+    PHPendingSelectors=[NSMutableArray array];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        PHApplyTimer=[NSTimer scheduledTimerWithTimeInterval:2.0 repeats:YES block:^(__unused NSTimer *timer){ [[PHOverlayManager sharedManager] applyKnownWebViews]; }];
+    });
+}
