@@ -15,23 +15,21 @@ static NSTimeInterval const PHThreeFingerHoldInterval = 0.8;
         return;
     }
 
-    // The reference implementation evaluates the UIEvent after the
-    // application's original sendEvent: has completed. Keep that behavior
-    // and use the touch phase as the qualification filter rather than a
-    // UIGestureRecognizer abstraction.
     NSSet<UITouch *> *touches = event.allTouches;
-    NSUInteger qualifyingTouches = 0;
+    NSUInteger activeTouches = 0;
 
+    // Active touches are Began, Moved or Stationary. Ended/Cancelled touches
+    // are not part of the three-finger hold condition.
     for (UITouch *touch in touches) {
-        // Match the reference's phase-based qualification (phase > 2).
-        // This includes stationary/ended/cancelled states and deliberately
-        // does not replace the mechanism with a tap recognizer.
-        if (touch.phase > UITouchPhaseMoved) {
-            qualifyingTouches += 1;
+        UITouchPhase phase = touch.phase;
+        if (phase == UITouchPhaseBegan ||
+            phase == UITouchPhaseMoved ||
+            phase == UITouchPhaseStationary) {
+            activeTouches += 1;
         }
     }
 
-    if (qualifyingTouches >= 3) {
+    if (activeTouches >= 3) {
         [self armIfNeeded];
     } else {
         [self cancelHoldAndResetTrigger];
