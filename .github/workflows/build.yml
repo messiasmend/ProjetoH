@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    # macOS-14 is the runner already proven to work in ProjetoH.
+    # GitHub Actions build trigger: use the proven macOS-14 runner.
     # Keep the known-good runner while fixing the GUI/persistence code.
     runs-on: macos-14
     steps:
