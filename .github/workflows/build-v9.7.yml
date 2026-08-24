@@ -1,0 +1,89 @@
+name: Build ProjetoH V9.7
+
+on:
+  push:
+    branches: [v9.7-gui-fix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Theos
+        uses: waruhachi/theos-action@v2.4.6
+        with:
+          theos-src: theos/theos
+          theos-branch: master
+          sdks-src: theos/sdks
+          sdks-branch: master
+
+      - name: Apply V9.1 scrollable inspector layout
+        run: |
+          set -euo pipefail
+          python3 Scripts/apply_v9_scroll_layout.py
+
+      - name: Apply V9.6 GUI row spacing fix
+        run: |
+          set -euo pipefail
+          python3 Scripts/apply_v9_6_gui_fix.py
+
+      - name: Validate V9.7 source
+        run: |
+          set -euo pipefail
+          test -f Sources/PHCustomFiltersManager.m
+          grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
+          grep -q 'action' Sources/PHCustomFiltersManager.m
+          grep -q 'PHFriendlyName' Sources/PHCustomFiltersManager.m
+          grep -q 'Ocultar' Sources/PHCustomFiltersManager.m
+          grep -q 'Ocultos' Sources/PHCustomFiltersManager.m
+
+      - name: Build package and dylib
+        run: |
+          set -euo pipefail
+          make clean package FINALPACKAGE=1
+
+      - name: Collect and validate standalone V9.7 dylib
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          CANDIDATES=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' -print)
+          if [ -z "$CANDIDATES" ]; then
+            echo "No staged ProjetoH.dylib found."
+            find .theos -type f | sort | tail -n 200
+            exit 1
+          fi
+          DYLIB=""
+          while IFS= read -r candidate; do
+            description=$(file -b "$candidate")
+            echo "$candidate -> $description"
+            if echo "$description" | grep -q 'dynamically linked shared library'; then
+              DYLIB="$candidate"
+              break
+            fi
+          done <<< "$CANDIDATES"
+          if [ -z "$DYLIB" ]; then
+            echo "Found candidate files, but none is a real Mach-O DYLIB."
+            exit 1
+          fi
+          cp "$DYLIB" artifacts/ProjetoH-V9.7.dylib
+          echo '--- Final ProjetoH V9.7 ---'
+          file artifacts/ProjetoH-V9.7.dylib
+          file -b artifacts/ProjetoH-V9.7.dylib | grep -q 'dynamically linked shared library'
+          ls -lah artifacts
+
+      - name: Upload ProjetoH V9.7 dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjetoH-V9.7-dylib
+          path: artifacts/ProjetoH-V9.7.dylib
+          if-no-files-found: error
+
+# V9.7: same proven V9.6 build flow; only the version/artifact name is advanced.
