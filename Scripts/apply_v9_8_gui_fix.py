@@ -11,7 +11,7 @@ overlay = Path("Sources/PHOverlayManager.m")
 s = overlay.read_text(encoding="utf-8")
 
 method_match = re.search(
-    r'(- \\(void\\)showPanelWithSubtitle:\\(NSString \\*\\)subtitle details:\\(NSString \\*\\)details \\{.*?\\n\\}\\n\\n- \\(void\\)showSelectedView:)',
+    r'(- \(void\)showPanelWithSubtitle:\(NSString \*\)subtitle details:\(NSString \*\)details \{.*?\n\}\n\n- \(void\)showSelectedView:)',
     s,
     re.S,
 )
@@ -19,8 +19,8 @@ if not method_match:
     raise SystemExit("V9.8: showPanelWithSubtitle method not found")
 
 method = method_match.group(1)
-pattern = r'(\\[hierarchy\\.bottomAnchor constraintEqualToAnchor:panel\\.bottomAnchor constant:)-20\\.0(\\])'
-method, n = re.subn(pattern, r'\\1-96.0\\2', method, count=1)
+pattern = r'(\[hierarchy\.bottomAnchor constraintEqualToAnchor:panel\.bottomAnchor constant:)-20\.0(\])'
+method, n = re.subn(pattern, r'\1-96.0\2', method, count=1)
 if n != 1:
     raise SystemExit("V9.8: Hierarquia bottom constraint not found")
 
