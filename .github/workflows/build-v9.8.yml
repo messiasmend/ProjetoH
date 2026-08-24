@@ -46,9 +46,11 @@ jobs:
           grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
           grep -q 'action' Sources/PHCustomFiltersManager.m
           grep -q 'PHFriendlyName' Sources/PHCustomFiltersManager.m
+          grep -q 'PHSelectorFromFilter' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultar' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultos' Sources/PHCustomFiltersManager.m
-          grep -q 'constant:-64.0' Sources/PHOverlayManager.m
+          grep -q 'constant:-96.0' Sources/PHOverlayManager.m
+          grep -q 'bounds.size.height-54.0' Sources/PHCustomFiltersManager.m
 
       - name: Build package and dylib
         run: |
@@ -92,4 +94,4 @@ jobs:
           path: artifacts/ProjetoH-V9.8.dylib
           if-no-files-found: error
 
-# V9.8: exact V9.7 build flow plus only the requested two-row GUI correction.
+# V9.8: exact V9.7 build flow plus the requested two-row GUI correction and robust hidden-filter naming.
