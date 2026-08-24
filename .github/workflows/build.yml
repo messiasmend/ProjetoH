@@ -26,11 +26,6 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Apply V9.1 scrollable inspector layout
-        run: |
-          set -euo pipefail
-          python3 Scripts/apply_v9_scroll_layout.py
-
       - name: Apply V9.6 GUI row spacing fix
         run: |
           set -euo pipefail
