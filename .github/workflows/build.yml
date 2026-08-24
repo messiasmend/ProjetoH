@@ -1,8 +1,8 @@
-name: Build ProjetoH V9.4
+name: Build ProjetoH V9.6
 
 on:
   push:
-    branches: [main]
+    branches: [main, v9.6-gui-filters-fix]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -31,11 +31,13 @@ jobs:
           set -euo pipefail
           python3 Scripts/apply_v9_scroll_layout.py
 
-      - name: Validate V9.4 source
+      - name: Validate V9.6 source
         run: |
           set -euo pipefail
           test -f Sources/PHCustomFiltersManager.m
           grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
+          grep -q 'action' Sources/PHCustomFiltersManager.m
+          grep -q 'PHFriendlyName' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultar' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultos' Sources/PHCustomFiltersManager.m
 
@@ -44,7 +46,7 @@ jobs:
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V9.4 dylib
+      - name: Collect and validate standalone V9.6 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -68,17 +70,17 @@ jobs:
             echo "Found candidate files, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V9.4.dylib
-          echo '--- Final ProjetoH V9.4 ---'
-          file artifacts/ProjetoH-V9.4.dylib
-          file -b artifacts/ProjetoH-V9.4.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V9.6.dylib
+          echo '--- Final ProjetoH V9.6 ---'
+          file artifacts/ProjetoH-V9.6.dylib
+          file -b artifacts/ProjetoH-V9.6.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V9.4 dylib
+      - name: Upload ProjetoH V9.6 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V9.4-dylib
-          path: artifacts/ProjetoH-V9.4.dylib
+          name: ProjetoH-V9.6-dylib
+          path: artifacts/ProjetoH-V9.6.dylib
           if-no-files-found: error
 
-# V9.4: lightweight hide/restore controls backed by dynamically located custom-filters.json.
+# V9.6: fix hidden-filter names and place Ocultar/Ocultos below the existing inspector controls.
