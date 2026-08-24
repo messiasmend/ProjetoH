@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           python3 Scripts/apply_v9_6_gui_fix.py
 
-      - name: Apply V9.8 two-row button layout
+      - name: Apply V9.8 minimal Hierarquia row fix
         run: |
           set -euo pipefail
           python3 Scripts/apply_v9_8_gui_fix.py
@@ -44,9 +44,7 @@ jobs:
           set -euo pipefail
           test -f Sources/PHCustomFiltersManager.m
           grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
-          grep -q 'action' Sources/PHCustomFiltersManager.m
           grep -q 'PHFriendlyName' Sources/PHCustomFiltersManager.m
-          grep -q 'PHSelectorFromFilter' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultar' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultos' Sources/PHCustomFiltersManager.m
           grep -q 'constant:-96.0' Sources/PHOverlayManager.m
@@ -94,4 +92,4 @@ jobs:
           path: artifacts/ProjetoH-V9.8.dylib
           if-no-files-found: error
 
-# V9.8: exact V9.7 build flow plus the requested two-row GUI correction and robust hidden-filter naming.
+# V9.8: V9.6 flow plus only the Hierarquia upper-row correction.
