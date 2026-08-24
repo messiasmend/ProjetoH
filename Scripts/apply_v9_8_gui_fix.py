@@ -3,9 +3,9 @@ from pathlib import Path
 import re
 
 # V9.8 is based on the proven V9.6 flow.
-# Do not rebuild or search for artificial V9.7 markers.
-# Only move the three existing inspector buttons upward and the two
-# custom-filter buttons downward so the GUI has two real rows.
+# Keep the inspector panel and its original three buttons intact.
+# Move the existing three-button row upward and place Ocultar/Ocultos
+# directly below it, still inside the 350x430 inspector panel.
 
 overlay = Path("Sources/PHOverlayManager.m")
 s = overlay.read_text(encoding="utf-8")
@@ -29,13 +29,14 @@ overlay.write_text(s, encoding="utf-8")
 custom = Path("Sources/PHCustomFiltersManager.m")
 s = custom.read_text(encoding="utf-8")
 
-# V9.6 creates Ocultar/Ocultos at -54. Keep those exact buttons and move
-# only their Y position down to -20 (near the panel bottom).
+# V9.6 creates Ocultar/Ocultos with the same horizontal positions.
+# Put them on a second row inside the panel: row 1 ends at y=334 and
+# row 2 starts at y=350, leaving a 16pt gap and 50pt bottom margin.
 old = 'h.frame=CGRectMake(MAX(18.0,bounds.size.width-192.0),bounds.size.height-54.0,82.0,30.0);m.frame=CGRectMake(MAX(108.0,bounds.size.width-100.0),bounds.size.height-54.0,82.0,30.0);'
-new = 'h.frame=CGRectMake(MAX(18.0,bounds.size.width-192.0),bounds.size.height-20.0,82.0,30.0);m.frame=CGRectMake(MAX(108.0,bounds.size.width-100.0),bounds.size.height-20.0,82.0,30.0);'
+new = 'h.frame=CGRectMake(MAX(18.0,bounds.size.width-192.0),bounds.size.height-80.0,82.0,30.0);m.frame=CGRectMake(MAX(108.0,bounds.size.width-100.0),bounds.size.height-80.0,82.0,30.0);'
 
 if old not in s:
     raise SystemExit("V9.8: V9.6 Ocultar/Ocultos button frames not found")
 
 custom.write_text(s.replace(old, new, 1), encoding="utf-8")
-print("Applied V9.8 two-row GUI layout from the V9.6 base")
+print("Applied V9.8 two-row GUI layout: original row at -96, Ocultar/Ocultos at -80")
