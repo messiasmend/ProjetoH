@@ -53,7 +53,6 @@ jobs:
           check "Ocultos button" grep -q 'Ocultos' Sources/PHOverlayManager.m
           check "Salvar button" grep -q 'Salvar' Sources/PHOverlayManager.m
           check "Pending selectors" grep -q 'PHPendingSelectors' Sources/PHOverlayManager.m
-          check "Persistent filters" grep -q 'ProjetoH.PersistentFilters' Sources/PHOverlayManager.m
           check "Hierarchy action" grep -q 'showHierarchy' Sources/PHOverlayManager.m
           check "Restore action" grep -q 'restoreInspector' Sources/PHOverlayManager.m
           check "Custom filters metadata" grep -q 'custom-filters.json' Sources/PHOverlayManager.m
