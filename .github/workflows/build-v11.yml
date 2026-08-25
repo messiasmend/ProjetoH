@@ -1,0 +1,86 @@
+name: Build ProjetoH V11
+
+on:
+  push:
+    branches: [v11-custom-filters-fix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Theos
+        uses: waruhachi/theos-action@v2.4.6
+        with:
+          theos-src: theos/theos
+          theos-branch: master
+          sdks-src: theos/sdks
+          sdks-branch: master
+
+      - name: Validate V11 custom-filters persistence source
+        run: |
+          set -euo pipefail
+          test -f Sources/PHCustomFiltersManager.m
+          grep -q 'PHNativeHideRule' Sources/PHCustomFiltersManager.m
+          grep -q 'css-display-none' Sources/PHCustomFiltersManager.m
+          grep -q 'url-filter' Sources/PHCustomFiltersManager.m
+          grep -q 'NSJSONWritingPrettyPrinted' Sources/PHCustomFiltersManager.m
+          grep -q 'NSJSONReadingMutableContainers' Sources/PHCustomFiltersManager.m
+          if grep -q '@"version"' Sources/PHCustomFiltersManager.m; then
+            echo 'Legacy version wrapper must not be written by V11.'
+            exit 1
+          fi
+
+      - name: Build package and dylib
+        run: |
+          set -euo pipefail
+          make clean package FINALPACKAGE=1
+
+      - name: Collect and validate standalone V11 dylib
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          CANDIDATES=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' -print)
+          if [ -z "$CANDIDATES" ]; then
+            echo 'No staged ProjetoH.dylib found.'
+            find .theos -type f | sort | tail -n 200
+            exit 1
+          fi
+
+          DYLIB=''
+          while IFS= read -r candidate; do
+            description=$(file -b "$candidate")
+            echo "$candidate -> $description"
+            if echo "$description" | grep -q 'dynamically linked shared library'; then
+              DYLIB="$candidate"
+              break
+            fi
+          done <<< "$CANDIDATES"
+
+          if [ -z "$DYLIB" ]; then
+            echo 'Found candidate files, but none is a real Mach-O DYLIB.'
+            exit 1
+          fi
+
+          cp "$DYLIB" artifacts/ProjetoH-V11.dylib
+          echo '--- Final ProjetoH V11 ---'
+          file artifacts/ProjetoH-V11.dylib
+          file -b artifacts/ProjetoH-V11.dylib | grep -q 'dynamically linked shared library'
+          ls -lah artifacts
+
+      - name: Upload ProjetoH V11 dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjetoH-V11-dylib
+          path: artifacts/ProjetoH-V11.dylib
+          if-no-files-found: error
+
+# V11: native WebKit/WebFrame custom-filters.json persistence and migration from V9 format.
