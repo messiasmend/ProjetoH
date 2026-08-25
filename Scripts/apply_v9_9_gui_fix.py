@@ -84,7 +84,9 @@ if "static char K1,K2;" not in s:
     raise SystemExit("V9.9: expected K1,K2 declaration not found")
 s = s.replace("static char K1,K2;", "static char K1,K2,K3;", 1)
 
-phadd_re = re.compile(r'static void PHAdd\(void\)\{.*?\n\}\n(?=static void\(\*Orig\))', re.S)
+# The V9.6/V9.9 source is minified around PHAdd, so do not require a newline
+# before the closing brace. Match the function boundary semantically.
+phadd_re = re.compile(r'static void PHAdd\(void\)\{.*?\}(?=\s*static void\(\*Orig\))', re.S)
 new_add = r'''static void PHAdd(void){
     UIViewController*v=PHI();
     if(!v)return;
@@ -98,21 +100,20 @@ new_add = r'''static void PHAdd(void){
 
     [v.view layoutIfNeeded];
 
-    UIView*panel=nil;
-    for(UIView*sub in v.view.subviews.reverseObjectEnumerator){
-        if(sub.tag==9002){
-            panel=sub.superview;
-            break;
-        }
-    }
-    if(!panel)return;
-
+    // Find the dedicated second-row host by its tag, not by panel dimensions.
     UIView*bottomRow=nil;
-    for(UIView*sub in panel.subviews){
+    for(UIView*sub in v.view.subviews.reverseObjectEnumerator){
         if(sub.tag==9002){
             bottomRow=sub;
             break;
         }
+        for(UIView*child in sub.subviews){
+            if(child.tag==9002){
+                bottomRow=child;
+                break;
+            }
+        }
+        if(bottomRow)break;
     }
     if(!bottomRow)return;
 
