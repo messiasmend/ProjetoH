@@ -35,11 +35,6 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Apply V15 base save/gui/persistence patch
-        run: |
-          set -euo pipefail
-          python3 Scripts/apply_v9_8_save_gui_persistence.py
-
       - name: Validate V15 source
         run: |
           set -euo pipefail
