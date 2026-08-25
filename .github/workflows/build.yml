@@ -40,6 +40,15 @@ jobs:
           BASE='96953d9b1f6dbc9d55567d8a4b6e53c6c47dd502'
           git fetch --no-tags origin "$BASE"
           git checkout "$BASE" -- Sources/PHOverlayManager.m
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Sources/PHV13Patch.m')
+          s = p.read_text(encoding='utf-8')
+          bad = '[[NSFileManager.defaultManager createDirectoryAtPath:p.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil] self];'
+          good = '[NSFileManager.defaultManager createDirectoryAtPath:p.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];'
+          if bad in s:
+              p.write_text(s.replace(bad, good), encoding='utf-8')
+          PY
 
       - name: Validate V13 source
         run: |
@@ -51,6 +60,7 @@ jobs:
           grep -Fq 'PHV13Pending' Sources/PHV13Patch.m
           grep -Fq 'NSJSONWritingPrettyPrinted' Sources/PHV13Patch.m
           grep -Fq 'custom-filters.json' Sources/PHV13Patch.m
+          ! grep -Fq 'createDirectoryAtPath:p.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil] self' Sources/PHV13Patch.m
           grep -Fq 'ProjetoH V13' Makefile .github/workflows/build.yml
 
       - name: Build package and dylib
