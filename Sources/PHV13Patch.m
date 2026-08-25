@@ -1,6 +1,7 @@
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
 
 #pragma mark - V13 state
 
@@ -136,6 +137,11 @@ static id PHV13Manager(void) {
 static UIViewController *PHV13Inspector(void) {
     id manager = PHV13Manager();
     return [manager valueForKey:@"inspectorViewController"];
+}
+
+static void PHV13RenderInspector(UIViewController *vc, BOOL hierarchyMode) {
+    if (!vc) return;
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(vc, @selector(render:), hierarchyMode);
 }
 
 #pragma mark - Clean GUI
@@ -284,10 +290,7 @@ static void PHV13HideSelectedElement(id self, SEL cmd) {
         PHV13HideSelector(webView, selector);
         dispatch_async(dispatch_get_main_queue(), ^{
             UIViewController *vc = PHV13Inspector();
-            if (vc) {
-                BOOL hierarchy = [[vc valueForKey:@"showingHierarchy"] boolValue];
-                [vc performSelector:@selector(render:) withObject:@(hierarchy)];
-            }
+            if (vc) PHV13RenderInspector(vc, [[vc valueForKey:@"showingHierarchy"] boolValue]);
         });
     }];
 }
@@ -323,10 +326,7 @@ static void PHV13SavePendingFilters(id self, SEL cmd) {
             WKWebView *webView = [self valueForKey:@"highlightedWebView"];
             PHV13ApplyFiltersToWebView(webView);
             UIViewController *inspector = PHV13Inspector();
-            if (inspector) {
-                BOOL hierarchy = [[inspector valueForKey:@"showingHierarchy"] boolValue];
-                [inspector performSelector:@selector(render:) withObject:@(hierarchy)];
-            }
+            if (inspector) PHV13RenderInspector(inspector, [[inspector valueForKey:@"showingHierarchy"] boolValue]);
         }
     }]];
     [vc presentViewController:confirm animated:YES completion:nil];
@@ -350,10 +350,7 @@ static void PHV13ShowHiddenElements(id self, SEL cmd) {
             PHV13RestoreSelector(webView, selector);
             [PHV13Pending removeObject:pending];
             UIViewController *inspector = PHV13Inspector();
-            if (inspector) {
-                BOOL hierarchy = [[inspector valueForKey:@"showingHierarchy"] boolValue];
-                [inspector performSelector:@selector(render:) withObject:@(hierarchy)];
-            }
+            if (inspector) PHV13RenderInspector(inspector, [[inspector valueForKey:@"showingHierarchy"] boolValue]);
         }]];
     }
 
@@ -369,10 +366,7 @@ static void PHV13ShowHiddenElements(id self, SEL cmd) {
             PHV13WriteFilters(cur);
             PHV13RestoreSelector(webView, selector);
             UIViewController *inspector = PHV13Inspector();
-            if (inspector) {
-                BOOL hierarchy = [[inspector valueForKey:@"showingHierarchy"] boolValue];
-                [inspector performSelector:@selector(render:) withObject:@(hierarchy)];
-            }
+            if (inspector) PHV13RenderInspector(inspector, [[inspector valueForKey:@"showingHierarchy"] boolValue]);
         }]];
     }
 
@@ -381,16 +375,11 @@ static void PHV13ShowHiddenElements(id self, SEL cmd) {
             for (NSDictionary *filter in PHV13NormalizedFilters()) PHV13RestoreSelector(webView, filter[@"action"][@"selector"]);
             PHV13WriteFilters(@[]);
             UIViewController *inspector = PHV13Inspector();
-            if (inspector) {
-                BOOL hierarchy = [[inspector valueForKey:@"showingHierarchy"] boolValue];
-                [inspector performSelector:@selector(render:) withObject:@(hierarchy)];
-            }
+            if (inspector) PHV13RenderInspector(inspector, [[inspector valueForKey:@"showingHierarchy"] boolValue]);
         }]];
     }
 
-    if (!saved.count && !PHV13Pending.count) {
-        alert.message = @"Nenhum elemento oculto.";
-    }
+    if (!saved.count && !PHV13Pending.count) alert.message = @"Nenhum elemento oculto.";
     [alert addAction:[UIAlertAction actionWithTitle:@"Fechar" style:UIAlertActionStyleCancel handler:nil]];
     [vc presentViewController:alert animated:YES completion:nil];
 }
@@ -427,9 +416,7 @@ __attribute__((constructor)) static void PHV13Init(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         Class inspector = NSClassFromString(@"PHInspectorViewController");
         Class manager = NSClassFromString(@"PHOverlayManager");
-        if (inspector) {
-            PHV13Swizzle(inspector, @selector(render:), (IMP)PHV13Render);
-        }
+        if (inspector) PHV13Swizzle(inspector, @selector(render:), (IMP)PHV13Render);
         if (manager) {
             PHV13Swizzle(manager, @selector(hideSelectedElement), (IMP)PHV13HideSelectedElement);
             PHV13Swizzle(manager, @selector(savePendingFilters), (IMP)PHV13SavePendingFilters);
