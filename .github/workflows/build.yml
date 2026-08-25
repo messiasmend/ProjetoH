@@ -1,4 +1,4 @@
-name: Build ProjetoH V13
+name: Build ProjetoH V15
 
 on:
   push:
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   build:
+    # GitHub Actions build trigger: use the proven macOS-14 runner.
     runs-on: macos-14
     steps:
       - name: Checkout
@@ -34,54 +35,34 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Prepare clean V13 source
+      - name: Apply V15 base save/gui/persistence patch
         run: |
           set -euo pipefail
-          BASE='96953d9b1f6dbc9d55567d8a4b6e53c6c47dd502'
-          git fetch --no-tags origin "$BASE"
-          git checkout "$BASE" -- Sources/PHOverlayManager.m
-          python3 - <<'PY'
-          from pathlib import Path
+          python3 Scripts/apply_v9_8_save_gui_persistence.py
 
-          # Normalize known source variants without changing the V13 logic.
-          p = Path('Sources/PHV13Patch.m')
-          s = p.read_text(encoding='utf-8')
-          bad = '[[NSFileManager.defaultManager createDirectoryAtPath:p.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil] self];'
-          good = '[NSFileManager.defaultManager createDirectoryAtPath:p.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];'
-          if bad in s:
-              p.write_text(s.replace(bad, good), encoding='utf-8')
-
-          p = Path('Sources/PHV13PatchFixed.m')
-          s = p.read_text(encoding='utf-8')
-          # NSString's componentsSeparatedByString: takes an argument, so it
-          # must use Objective-C message syntax rather than dot syntax.
-          bad = 'x.componentsSeparatedByString(@" > ").lastObject'
-          good = '[x componentsSeparatedByString:@" > "].lastObject'
-          if bad not in s:
-              raise SystemExit('Expected V13 string-split expression was not found')
-          p.write_text(s.replace(bad, good), encoding='utf-8')
-          PY
-
-      - name: Validate V13 source
+      - name: Validate V15 source
         run: |
           set -euo pipefail
-          test -f Sources/PHV13PatchFixed.m
-          grep -Fq 'css-display-none' Sources/PHV13PatchFixed.m
-          grep -Fq '"trigger"' Sources/PHV13PatchFixed.m
-          grep -Fq 'Salvar alterações?' Sources/PHV13PatchFixed.m
-          grep -Fq 'PHV13Pending' Sources/PHV13PatchFixed.m
-          grep -Fq 'NSJSONWritingPrettyPrinted' Sources/PHV13PatchFixed.m
-          grep -Fq 'custom-filters.json' Sources/PHV13PatchFixed.m
-          grep -Fq '[x componentsSeparatedByString:@" > "].lastObject' Sources/PHV13PatchFixed.m
-          ! grep -Fq 'x.componentsSeparatedByString(@" > ")' Sources/PHV13PatchFixed.m
-          grep -Fq 'ProjetoH V13' Makefile .github/workflows/build.yml
+          grep -q 'Ocultar' Sources/PHOverlayManager.m
+          grep -q 'Ocultos' Sources/PHOverlayManager.m
+          grep -q 'Salvar' Sources/PHOverlayManager.m
+          grep -q 'PHPendingSelectors' Sources/PHOverlayManager.m
+          grep -q 'ProjetoH.PersistentFilters' Sources/PHOverlayManager.m
+          grep -q 'showHierarchy' Sources/PHOverlayManager.m
+          grep -q 'restoreInspector' Sources/PHOverlayManager.m
+          grep -q 'custom-filters.json' Sources/PHOverlayManager.m
+          grep -q 'heightAnchor constraintEqualToConstant:560' Sources/PHOverlayManager.m
+          ! grep -q 'PHCustomFiltersManager.m' Makefile
+          test -f Sources/PHV15Patch.m
+          grep -q 'Lottie Player' Sources/PHV15Patch.m
+          grep -q 'Reativar todos' Sources/PHV15Patch.m
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V13 dylib
+      - name: Collect and validate standalone V15 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -105,14 +86,14 @@ jobs:
             echo "Found candidates, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V13.dylib
-          file artifacts/ProjetoH-V13.dylib
-          file -b artifacts/ProjetoH-V13.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V15.dylib
+          file artifacts/ProjetoH-V15.dylib
+          file -b artifacts/ProjetoH-V15.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V13 dylib
+      - name: Upload ProjetoH V15 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V13-dylib
-          path: artifacts/ProjetoH-V13.dylib
+          name: ProjetoH-V15-dylib
+          path: artifacts/ProjetoH-V15.dylib
           if-no-files-found: error
