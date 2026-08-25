@@ -1,33 +1,689 @@
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
-@interface PHOverlayManager:NSObject
+
+@interface PHOverlayManager : NSObject
 + (instancetype)sharedManager;
 @end
-@interface PHCustomFiltersTarget:NSObject
+
+@interface PHCustomFiltersTarget : NSObject
 + (instancetype)sharedTarget;
 - (void)hide:(id)s;
 - (void)manage:(id)s;
 @end
-static char K1,K2;
-static NSString *PHPath(void){NSString*h=NSHomeDirectory();NSDirectoryEnumerator*e=[NSFileManager.defaultManager enumeratorAtPath:h];NSString*p;while((p=[e nextObject]))if([p.lastPathComponent.lowercaseString isEqualToString:@"custom-filters.json"])return[h stringByAppendingPathComponent:p];return[h stringByAppendingPathComponent:@"Documents/custom-filters.json"];}
-static id PHM(void){Class c=NSClassFromString(@"PHOverlayManager");return[c respondsToSelector:@selector(sharedManager)]?[c performSelector:@selector(sharedManager)]:nil;}
-static WKWebView*PHW(void){id m=PHM();return[m valueForKey:@"highlightedWebView"];}
-static UIViewController*PHI(void){id m=PHM();return[m valueForKey:@"inspectorViewController"];}
-static NSMutableArray*PHLoad(void){NSData*d=[NSData dataWithContentsOfFile:PHPath()];if(!d)return[NSMutableArray array];id j=[NSJSONSerialization JSONObjectWithData:d options:NSJSONReadingMutableContainers error:nil];if([j isKindOfClass:NSDictionary.class])j=j[@"filters"];return[j isKindOfClass:NSArray.class]?[j mutableCopy]:[NSMutableArray array];}
-static void PHSave(NSArray*a){NSString*p=PHPath();[[NSFileManager defaultManager]createDirectoryAtPath:p.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];NSData*d=[NSJSONSerialization dataWithJSONObject:@{@"version":@1, @"filters":a?:@[]} options:0 error:nil];[d writeToFile:p atomically:YES];}
-static NSString*PHSelected(void){return @"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(!e)return '{}';function p(n){if(n.id)return '#'+CSS.escape(n.id);var a=[];while(n&&n.nodeType===1&&n!==document.body){var q=n.parentElement;if(!q)break;var s=[...q.children].filter(x=>x.tagName===n.tagName);a.unshift(n.tagName.toLowerCase()+':nth-of-type('+(s.indexOf(n)+1)+')');n=q}return a.join(' > ')}return JSON.stringify({selector:p(e)})})()";}
-static void PHApply(void){WKWebView*w=PHW();if(!w)return;NSMutableArray*s=[NSMutableArray array];for(NSDictionary*f in PHLoad()){NSString*selector=f[@"selector"];if(![selector isKindOfClass:NSString.class]||!selector.length){NSDictionary*action=f[@"action"];if([action isKindOfClass:NSDictionary.class])selector=action[@"selector"];}if([selector isKindOfClass:NSString.class]&&selector.length)[s addObject:selector];}NSData*d=[NSJSONSerialization dataWithJSONObject:s options:0 error:nil];NSString*j=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding]?:@"[]";NSString*js=[NSString stringWithFormat:@"(function(){document.querySelectorAll('[data-projetoh-hidden=\\\"1\\\"]').forEach(function(e){e.style.display=e.getAttribute('data-projetoh-prev-display')||'';e.removeAttribute('data-projetoh-hidden');e.removeAttribute('data-projetoh-prev-display')});(%@).forEach(function(s){try{document.querySelectorAll(s).forEach(function(e){e.setAttribute('data-projetoh-hidden','1');e.setAttribute('data-projetoh-prev-display',e.style.display||'');e.style.display='none'})}catch(x){}})})()",j];[w evaluateJavaScript:js completionHandler:nil];}
-static void PHRestore(NSString*s){WKWebView*w=PHW();if(!w)return;NSData*d=[NSJSONSerialization dataWithJSONObject:@[s] options:0 error:nil];NSString*j=[[NSString alloc]initWithData:d encoding:NSUTF8StringEncoding]?:@"[]";NSString*js=[NSString stringWithFormat:@"(%@).forEach(function(s){try{document.querySelectorAll(s).forEach(function(e){e.style.display=e.getAttribute('data-projetoh-prev-display')||'';e.removeAttribute('data-projetoh-hidden');e.removeAttribute('data-projetoh-prev-display')})}catch(x){}})",j];[w evaluateJavaScript:js completionHandler:nil];}
-static void PHHide(void){WKWebView*w=PHW();if(!w)return;[w evaluateJavaScript:PHSelected() completionHandler:^(id r,NSError*e){if(e||![r isKindOfClass:NSString.class])return;NSDictionary*i=[NSJSONSerialization JSONObjectWithData:[r dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];NSString*s=i[@"selector"];if(!s.length)return;NSMutableArray*a=PHLoad();BOOL ok=NO;for(NSDictionary*f in a){NSString*fs=f[@"selector"];if(![fs isKindOfClass:NSString.class]){NSDictionary*action=f[@"action"];if([action isKindOfClass:NSDictionary.class])fs=action[@"selector"];}if([fs isEqualToString:s]){ok=YES;break;}}if(!ok){[a addObject:@{@"selector":s}];PHSave(a);}PHApply();}];}
-static NSString*PHFriendlyName(NSDictionary*f){NSString*s=f[@"selector"];if(![s isKindOfClass:NSString.class]||!s.length){NSDictionary*action=f[@"action"];if([action isKindOfClass:NSDictionary.class])s=action[@"selector"];}if(![s isKindOfClass:NSString.class]||!s.length)return @"Elemento oculto";if([s isEqualToString:@"[id=header]"]||[s isEqualToString:@"#header"])return @"Cabeçalho";if([s isEqualToString:@".q-page-sticky"])return @"Elementos fixos";NSArray*parts=[s componentsSeparatedByString:@">"];NSString*last=[parts.lastObject stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];NSRange pseudo=[last rangeOfString:@":"];if(pseudo.location!=NSNotFound)last=[last substringToIndex:pseudo.location];NSRange idr=[last rangeOfString:@"#"];if(idr.location!=NSNotFound&&idr.location+1<last.length)return[NSString stringWithFormat:@"Elemento #%@",[last substringFromIndex:idr.location+1]];NSRange cr=[last rangeOfString:@"."];if(cr.location!=NSNotFound&&cr.location+1<last.length)return[NSString stringWithFormat:@"Elemento .%@",[last substringFromIndex:cr.location+1]];if([last caseInsensitiveCompare:@"img"]==NSOrderedSame)return @"Imagem";if([last caseInsensitiveCompare:@"lottie-player"]==NSOrderedSame)return @"Lottie Player";if(last.length==2&&[last.lowercaseString hasPrefix:@"h"]&&[[NSCharacterSet decimalDigitCharacterSet] characterIsMember:[last characterAtIndex:1]])return[NSString stringWithFormat:@"Título (%@)",[last uppercaseString]];if([last caseInsensitiveCompare:@"p"]==NSOrderedSame)return @"Texto";if([last caseInsensitiveCompare:@"main"]==NSOrderedSame)return @"Conteúdo principal";if([last caseInsensitiveCompare:@"section"]==NSOrderedSame)return @"Seção";if([last caseInsensitiveCompare:@"table"]==NSOrderedSame)return @"Tabela";if([last caseInsensitiveCompare:@"button"]==NSOrderedSame)return @"Botão";if([last caseInsensitiveCompare:@"center"]==NSOrderedSame)return @"Área central";if(last.length>0&&last.length<40)return[NSString stringWithFormat:@"Elemento <%@>",last];return @"Elemento oculto";}
-static void PHManage(void){UIViewController*v=PHI();if(!v)return;NSArray*a=PHLoad();UIAlertController*x=[UIAlertController alertControllerWithTitle:@"Elementos ocultos" message:[NSString stringWithFormat:@"%lu item(ns) em custom-filters.json",(unsigned long)a.count] preferredStyle:UIAlertControllerStyleAlert];for(NSDictionary*f in a){NSString*s=f[@"selector"];if(![s isKindOfClass:NSString.class]||!s.length){NSDictionary*action=f[@"action"];if([action isKindOfClass:NSDictionary.class])s=action[@"selector"];}NSString*name=PHFriendlyName(f);[x addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Reativar: %@",name] style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction*q){NSMutableArray*c=PHLoad();NSIndexSet*z=[c indexesOfObjectsPassingTest:^BOOL(NSDictionary*d,NSUInteger n,BOOL*stop){NSString*ds=d[@"selector"];if(![ds isKindOfClass:NSString.class]||!ds.length){NSDictionary*action=d[@"action"];if([action isKindOfClass:NSDictionary.class])ds=action[@"selector"];}return[ds isEqual:s];}];[c removeObjectsAtIndexes:z];PHSave(c);PHRestore(s);}]];}if(a.count)[x addAction:[UIAlertAction actionWithTitle:@"Reativar todos" style:UIAlertActionStyleDestructive handler:^(__unused UIAlertAction*q){for(NSDictionary*f in PHLoad()){NSString*s=f[@"selector"];if(![s isKindOfClass:NSString.class]||!s.length){NSDictionary*action=f[@"action"];if([action isKindOfClass:NSDictionary.class])s=action[@"selector"];}if([s isKindOfClass:NSString.class]&&s.length)PHRestore(s);}PHSave(@[]);}]];[x addAction:[UIAlertAction actionWithTitle:@"Fechar" style:UIAlertActionStyleCancel handler:nil]];[v presentViewController:x animated:YES completion:nil];}
+
+static char K1, K2;
+
+static NSString *PHPath(void) {
+    NSString *home = NSHomeDirectory();
+    NSString *documentsPath = [home stringByAppendingPathComponent:@"Documents/custom-filters.json"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:documentsPath]) {
+        return documentsPath;
+    }
+
+    NSDirectoryEnumerator *enumerator = [[NSFileManager defaultManager] enumeratorAtPath:home];
+    NSString *relativePath = nil;
+    while ((relativePath = [enumerator nextObject])) {
+        if ([relativePath.lastPathComponent.lowercaseString isEqualToString:@"custom-filters.json"]) {
+            return [home stringByAppendingPathComponent:relativePath];
+        }
+    }
+
+    return documentsPath;
+}
+
+static id PHM(void) {
+    Class c = NSClassFromString(@"PHOverlayManager");
+    return [c respondsToSelector:@selector(sharedManager)] ? [c performSelector:@selector(sharedManager)] : nil;
+}
+
+static WKWebView *PHW(void) {
+    id manager = PHM();
+    return [manager valueForKey:@"highlightedWebView"];
+}
+
+static UIViewController *PHI(void) {
+    id manager = PHM();
+    return [manager valueForKey:@"inspectorViewController"];
+}
+
+/*
+ * WebFrame custom-filters.json uses the native WebKit Content Blocker
+ * representation: an array of { trigger, action } rule dictionaries.
+ *
+ * V9.9 wrote a private { version, filters } wrapper and selector-only
+ * objects. V11 reads both formats for migration, but ALWAYS writes the
+ * native array format back to disk.
+ */
+static NSDictionary *PHNativeHideRule(NSString *selector) {
+    return @{
+        @"trigger": @{@"url-filter": @".*"},
+        @"action": @{
+            @"type": @"css-display-none",
+            @"selector": selector
+        }
+    };
+}
+
+static NSString *PHSelectorFromRule(NSDictionary *rule) {
+    if (![rule isKindOfClass:NSDictionary.class]) {
+        return nil;
+    }
+
+    NSDictionary *action = rule[@"action"];
+    if ([action isKindOfClass:NSDictionary.class]) {
+        NSString *selector = action[@"selector"];
+        NSString *type = action[@"type"];
+        if ([selector isKindOfClass:NSString.class] &&
+            selector.length > 0 &&
+            (!type || [type isEqualToString:@"css-display-none"])) {
+            return selector;
+        }
+    }
+
+    NSString *legacySelector = rule[@"selector"];
+    if ([legacySelector isKindOfClass:NSString.class] && legacySelector.length > 0) {
+        return legacySelector;
+    }
+
+    return nil;
+}
+
+static BOOL PHIsNativeRule(NSDictionary *rule) {
+    if (![rule isKindOfClass:NSDictionary.class]) {
+        return NO;
+    }
+
+    NSDictionary *action = rule[@"action"];
+    NSDictionary *trigger = rule[@"trigger"];
+
+    if (![action isKindOfClass:NSDictionary.class] ||
+        ![trigger isKindOfClass:NSDictionary.class]) {
+        return NO;
+    }
+
+    NSString *type = action[@"type"];
+    NSString *urlFilter = trigger[@"url-filter"];
+
+    return [type isKindOfClass:NSString.class] &&
+           [urlFilter isKindOfClass:NSString.class] &&
+           type.length > 0 &&
+           urlFilter.length > 0;
+}
+
+static NSMutableArray *PHNormalizeRules(id root) {
+    id candidate = root;
+
+    /* Legacy V9 format: { "version": 1, "filters": [ ... ] } */
+    if ([candidate isKindOfClass:NSDictionary.class]) {
+        id filters = candidate[@"filters"];
+        if ([filters isKindOfClass:NSArray.class]) {
+            candidate = filters;
+        } else {
+            return [NSMutableArray array];
+        }
+    }
+
+    if (![candidate isKindOfClass:NSArray.class]) {
+        return [NSMutableArray array];
+    }
+
+    NSMutableArray *rules = [NSMutableArray array];
+
+    for (id item in (NSArray *)candidate) {
+        if (![item isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
+
+        NSDictionary *rule = (NSDictionary *)item;
+
+        if (PHIsNativeRule(rule)) {
+            [rules addObject:rule];
+            continue;
+        }
+
+        /* Migrate V9 selector-only entries without dropping them. */
+        NSString *selector = PHSelectorFromRule(rule);
+        if (selector.length > 0) {
+            [rules addObject:PHNativeHideRule(selector)];
+        }
+    }
+
+    return rules;
+}
+
+static NSMutableArray *PHLoad(void) {
+    NSString *path = PHPath();
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (!data.length) {
+        return [NSMutableArray array];
+    }
+
+    NSError *jsonError = nil;
+    id root = [NSJSONSerialization JSONObjectWithData:data
+                                               options:NSJSONReadingMutableContainers
+                                                 error:&jsonError];
+
+    if (jsonError || !root) {
+        return [NSMutableArray array];
+    }
+
+    return PHNormalizeRules(root);
+}
+
+static BOOL PHSave(NSArray *rules) {
+    NSString *path = PHPath();
+    NSString *directory = path.stringByDeletingLastPathComponent;
+
+    NSError *directoryError = nil;
+    [[NSFileManager defaultManager] createDirectoryAtPath:directory
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:&directoryError];
+    if (directoryError) {
+        return NO;
+    }
+
+    NSMutableArray *nativeRules = [NSMutableArray array];
+    for (id item in rules) {
+        if (![item isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
+
+        NSDictionary *rule = (NSDictionary *)item;
+        if (PHIsNativeRule(rule)) {
+            [nativeRules addObject:rule];
+            continue;
+        }
+
+        NSString *selector = PHSelectorFromRule(rule);
+        if (selector.length > 0) {
+            [nativeRules addObject:PHNativeHideRule(selector)];
+        }
+    }
+
+    NSError *jsonError = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:nativeRules
+                                                   options:NSJSONWritingPrettyPrinted
+                                                     error:&jsonError];
+    if (jsonError || !data) {
+        return NO;
+    }
+
+    NSError *writeError = nil;
+    BOOL ok = [data writeToFile:path options:NSDataWritingAtomic error:&writeError];
+    return ok && !writeError;
+}
+
+static NSString *PHSelected(void) {
+    return @"(function(){"
+           "var e=document.querySelector('[data-projetoh-selected=\"1\"]');"
+           "if(!e)return '{}';"
+           "function p(n){"
+               "if(n.id)return '#'+CSS.escape(n.id);"
+               "var a=[];"
+               "while(n&&n.nodeType===1&&n!==document.body){"
+                   "var q=n.parentElement;"
+                   "if(!q)break;"
+                   "var s=[...q.children].filter(x=>x.tagName===n.tagName);"
+                   "a.unshift(n.tagName.toLowerCase()+':nth-of-type('+(s.indexOf(n)+1)+')');"
+                   "n=q;"
+               "}"
+               "return a.join(' > ');"
+           "}"
+           "return JSON.stringify({selector:p(e)});"
+           "})()";
+}
+
+static void PHApply(void) {
+    WKWebView *webView = PHW();
+    if (!webView) {
+        return;
+    }
+
+    NSMutableArray *selectors = [NSMutableArray array];
+
+    for (NSDictionary *rule in PHLoad()) {
+        NSDictionary *action = rule[@"action"];
+        if (![action isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
+
+        NSString *type = action[@"type"];
+        NSString *selector = action[@"selector"];
+
+        if ([type isEqualToString:@"css-display-none"] &&
+            [selector isKindOfClass:NSString.class] &&
+            selector.length > 0) {
+            [selectors addObject:selector];
+        }
+    }
+
+    NSError *jsonError = nil;
+    NSData *selectorData = [NSJSONSerialization dataWithJSONObject:selectors
+                                                             options:0
+                                                               error:&jsonError];
+    if (jsonError || !selectorData) {
+        return;
+    }
+
+    NSString *selectorJSON = [[NSString alloc] initWithData:selectorData
+                                                    encoding:NSUTF8StringEncoding];
+    if (!selectorJSON.length) {
+        return;
+    }
+
+    NSString *javascript = [NSString stringWithFormat:
+        @"(function(){"
+            "document.querySelectorAll('[data-projetoh-hidden=\"1\"]').forEach(function(e){"
+                "e.style.display=e.getAttribute('data-projetoh-prev-display')||'';"
+                "e.removeAttribute('data-projetoh-hidden');"
+                "e.removeAttribute('data-projetoh-prev-display');"
+            "});"
+            "(%@).forEach(function(s){"
+                "try{"
+                    "document.querySelectorAll(s).forEach(function(e){"
+                        "e.setAttribute('data-projetoh-hidden','1');"
+                        "e.setAttribute('data-projetoh-prev-display',e.style.display||'');"
+                        "e.style.display='none';"
+                    "});"
+                "}catch(x){}"
+            "});"
+        "})()", selectorJSON];
+
+    [webView evaluateJavaScript:javascript completionHandler:nil];
+}
+
+static void PHRestore(NSString *selector) {
+    WKWebView *webView = PHW();
+    if (!webView || !selector.length) {
+        return;
+    }
+
+    NSError *jsonError = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@[selector]
+                                                    options:0
+                                                      error:&jsonError];
+    if (jsonError || !data) {
+        return;
+    }
+
+    NSString *selectorJSON = [[NSString alloc] initWithData:data
+                                                    encoding:NSUTF8StringEncoding];
+    if (!selectorJSON.length) {
+        return;
+    }
+
+    NSString *javascript = [NSString stringWithFormat:
+        @"(%@).forEach(function(s){"
+            "try{"
+                "document.querySelectorAll(s).forEach(function(e){"
+                    "e.style.display=e.getAttribute('data-projetoh-prev-display')||'';"
+                    "e.removeAttribute('data-projetoh-hidden');"
+                    "e.removeAttribute('data-projetoh-prev-display');"
+                "});"
+            "}catch(x){}"
+        "})", selectorJSON];
+
+    [webView evaluateJavaScript:javascript completionHandler:nil];
+}
+
+static void PHHide(void) {
+    WKWebView *webView = PHW();
+    if (!webView) {
+        return;
+    }
+
+    [webView evaluateJavaScript:PHSelected() completionHandler:^(id result, NSError *error) {
+        if (error || ![result isKindOfClass:NSString.class]) {
+            return;
+        }
+
+        NSData *resultData = [(NSString *)result dataUsingEncoding:NSUTF8StringEncoding];
+        NSDictionary *selected = [NSJSONSerialization JSONObjectWithData:resultData
+                                                                   options:0
+                                                                     error:nil];
+        NSString *selector = selected[@"selector"];
+        if (![selector isKindOfClass:NSString.class] || !selector.length) {
+            return;
+        }
+
+        NSMutableArray *rules = PHLoad();
+        BOOL alreadyExists = NO;
+
+        for (NSDictionary *rule in rules) {
+            NSString *existingSelector = PHSelectorFromRule(rule);
+            NSDictionary *action = rule[@"action"];
+            NSString *type = [action isKindOfClass:NSDictionary.class] ? action[@"type"] : nil;
+
+            if ([existingSelector isEqualToString:selector] &&
+                (!type || [type isEqualToString:@"css-display-none"])) {
+                alreadyExists = YES;
+                break;
+            }
+        }
+
+        if (!alreadyExists) {
+            [rules addObject:PHNativeHideRule(selector)];
+            if (!PHSave(rules)) {
+                return;
+            }
+        }
+
+        PHApply();
+    }];
+}
+
+static NSString *PHFriendlyName(NSDictionary *rule) {
+    NSString *selector = PHSelectorFromRule(rule);
+
+    if (!selector.length) {
+        return @"Elemento oculto";
+    }
+
+    if ([selector isEqualToString:@"[id=header]"] ||
+        [selector isEqualToString:@"#header"]) {
+        return @"Cabeçalho";
+    }
+
+    if ([selector isEqualToString:@".q-page-sticky"]) {
+        return @"Elementos fixos";
+    }
+
+    NSArray *parts = [selector componentsSeparatedByString:@">"];
+    NSString *last = [parts.lastObject stringByTrimmingCharactersInSet:
+                      NSCharacterSet.whitespaceAndNewlineCharacterSet];
+
+    NSRange pseudo = [last rangeOfString:@":"];
+    if (pseudo.location != NSNotFound) {
+        last = [last substringToIndex:pseudo.location];
+    }
+
+    NSRange idRange = [last rangeOfString:@"#"];
+    if (idRange.location != NSNotFound && idRange.location + 1 < last.length) {
+        return [NSString stringWithFormat:@"Elemento #%@",
+                [last substringFromIndex:idRange.location + 1]];
+    }
+
+    NSRange classRange = [last rangeOfString:@"."];
+    if (classRange.location != NSNotFound && classRange.location + 1 < last.length) {
+        return [NSString stringWithFormat:@"Elemento .%@",
+                [last substringFromIndex:classRange.location + 1]];
+    }
+
+    if ([last caseInsensitiveCompare:@"img"] == NSOrderedSame) {
+        return @"Imagem";
+    }
+
+    if ([last caseInsensitiveCompare:@"lottie-player"] == NSOrderedSame) {
+        return @"Lottie Player";
+    }
+
+    if (last.length == 2 &&
+        [last.lowercaseString hasPrefix:@"h"] &&
+        [[NSCharacterSet decimalDigitCharacterSet] characterIsMember:[last characterAtIndex:1]]) {
+        return [NSString stringWithFormat:@"Título (%@)", [last uppercaseString]];
+    }
+
+    if ([last caseInsensitiveCompare:@"p"] == NSOrderedSame) {
+        return @"Texto";
+    }
+
+    if ([last caseInsensitiveCompare:@"main"] == NSOrderedSame) {
+        return @"Conteúdo principal";
+    }
+
+    if ([last caseInsensitiveCompare:@"section"] == NSOrderedSame) {
+        return @"Seção";
+    }
+
+    if ([last caseInsensitiveCompare:@"table"] == NSOrderedSame) {
+        return @"Tabela";
+    }
+
+    if ([last caseInsensitiveCompare:@"button"] == NSOrderedSame) {
+        return @"Botão";
+    }
+
+    if ([last caseInsensitiveCompare:@"center"] == NSOrderedSame) {
+        return @"Área central";
+    }
+
+    if (last.length > 0 && last.length < 40) {
+        return [NSString stringWithFormat:@"Elemento <%@>", last];
+    }
+
+    return @"Elemento oculto";
+}
+
+static void PHManage(void) {
+    UIViewController *viewController = PHI();
+    if (!viewController) {
+        return;
+    }
+
+    NSArray *rules = PHLoad();
+    NSMutableArray *hideRules = [NSMutableArray array];
+
+    for (NSDictionary *rule in rules) {
+        NSDictionary *action = rule[@"action"];
+        if (![action isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
+
+        if ([action[@"type"] isEqualToString:@"css-display-none"] &&
+            [action[@"selector"] isKindOfClass:NSString.class] &&
+            [action[@"selector"] length] > 0) {
+            [hideRules addObject:rule];
+        }
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"Elementos ocultos"
+                                            message:[NSString stringWithFormat:
+                                                      @"%lu item(ns) em custom-filters.json",
+                                                      (unsigned long)hideRules.count]
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    for (NSDictionary *rule in hideRules) {
+        NSString *selector = rule[@"action"][ @"selector"];
+        NSString *name = PHFriendlyName(rule);
+
+        [alert addAction:
+            [UIAlertAction actionWithTitle:
+                [NSString stringWithFormat:@"Reativar: %@", name]
+                                    style:UIAlertActionStyleDefault
+                                  handler:^(__unused UIAlertAction *button) {
+            NSMutableArray *currentRules = PHLoad();
+            NSMutableArray *remaining = [NSMutableArray array];
+
+            for (NSDictionary *currentRule in currentRules) {
+                NSString *currentSelector = PHSelectorFromRule(currentRule);
+                NSDictionary *currentAction = currentRule[@"action"];
+                NSString *currentType =
+                    [currentAction isKindOfClass:NSDictionary.class] ?
+                    currentAction[@"type"] : nil;
+
+                BOOL sameHideRule =
+                    [currentSelector isEqualToString:selector] &&
+                    (!currentType || [currentType isEqualToString:@"css-display-none"]);
+
+                if (!sameHideRule) {
+                    [remaining addObject:currentRule];
+                }
+            }
+
+            if (PHSave(remaining)) {
+                PHRestore(selector);
+            }
+        }]];
+    }
+
+    if (hideRules.count) {
+        [alert addAction:
+            [UIAlertAction actionWithTitle:@"Reativar todos"
+                                      style:UIAlertActionStyleDestructive
+                                    handler:^(__unused UIAlertAction *button) {
+            NSMutableArray *currentRules = PHLoad();
+
+            for (NSDictionary *rule in currentRules) {
+                NSDictionary *action = rule[@"action"];
+                if ([action isKindOfClass:NSDictionary.class] &&
+                    [action[@"type"] isEqualToString:@"css-display-none"]) {
+                    NSString *selector = action[@"selector"];
+                    if ([selector isKindOfClass:NSString.class] && selector.length) {
+                        PHRestore(selector);
+                    }
+                }
+            }
+
+            NSMutableArray *remaining = [NSMutableArray array];
+            for (NSDictionary *rule in currentRules) {
+                NSDictionary *action = rule[@"action"];
+                BOOL isHideRule =
+                    [action isKindOfClass:NSDictionary.class] &&
+                    [action[@"type"] isEqualToString:@"css-display-none"];
+
+                if (!isHideRule) {
+                    [remaining addObject:rule];
+                }
+            }
+
+            PHSave(remaining);
+        }]];
+    }
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"Fechar"
+                                  style:UIAlertActionStyleCancel
+                                handler:nil]];
+
+    [viewController presentViewController:alert animated:YES completion:nil];
+}
+
 @implementation PHCustomFiltersTarget
-+ (instancetype)sharedTarget{static id t;static dispatch_once_t o;dispatch_once(&o,^{t=[self new];});return t;}
-- (void)hide:(id)s{PHHide();}
-- (void)manage:(id)s{PHManage();}
+
++ (instancetype)sharedTarget {
+    static id target;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        target = [self new];
+    });
+    return target;
+}
+
+- (void)hide:(id)sender {
+    PHHide();
+}
+
+- (void)manage:(id)sender {
+    PHManage();
+}
+
 @end
-static void PHAdd(void){UIViewController*v=PHI();if(!v)return;UIButton*o=objc_getAssociatedObject(v,&K1);if(o)[o removeFromSuperview];UIButton*o2=objc_getAssociatedObject(v,&K2);if(o2)[o2 removeFromSuperview];[v.view layoutIfNeeded];UIView*panel=nil;for(UIView*sub in v.view.subviews.reverseObjectEnumerator){if(sub!=v.view&&fabs(sub.bounds.size.width-350.0)<2.0&&fabs(sub.bounds.size.height-430.0)<2.0){panel=sub;break;}}UIView*host=panel?:v.view;CGRect bounds=host.bounds;UIButton*h=[UIButton buttonWithType:UIButtonTypeSystem];UIButton*m=[UIButton buttonWithType:UIButtonTypeSystem];h.frame=CGRectMake(MAX(18.0,bounds.size.width-192.0),bounds.size.height-54.0,82.0,30.0);m.frame=CGRectMake(MAX(108.0,bounds.size.width-100.0),bounds.size.height-54.0,82.0,30.0);h.autoresizingMask=UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleTopMargin;m.autoresizingMask=UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleTopMargin;[h setTitle:@"Ocultar" forState:UIControlStateNormal];h.titleLabel.font=[UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];[m setTitle:@"Ocultos" forState:UIControlStateNormal];m.titleLabel.font=[UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];[h addTarget:PHCustomFiltersTarget.sharedTarget action:@selector(hide:) forControlEvents:UIControlEventTouchUpInside];[m addTarget:PHCustomFiltersTarget.sharedTarget action:@selector(manage:) forControlEvents:UIControlEventTouchUpInside];[host addSubview:h];[host addSubview:m];objc_setAssociatedObject(v,&K1,h,OBJC_ASSOCIATION_RETAIN_NONATOMIC);objc_setAssociatedObject(v,&K2,m,OBJC_ASSOCIATION_RETAIN_NONATOMIC);}
-static void(*Orig)(id,SEL,NSString*);
-static void Hook(id s,SEL c,NSString*d){if(Orig)Orig(s,c,d);dispatch_async(dispatch_get_main_queue(),^{PHAdd();});}
-__attribute__((constructor))static void Init(void){dispatch_async(dispatch_get_main_queue(),^{Class c=NSClassFromString(@"PHInspectorViewController");Method m=class_getInstanceMethod(c,@selector(showSelectedWebElement:));if(!m)return;static dispatch_once_t o;dispatch_once(&o,^{Orig=(void(*)(id,SEL,NSString*))method_getImplementation(m);method_setImplementation(m,(IMP)Hook);});});}
+
+static void PHAdd(void) {
+    UIViewController *viewController = PHI();
+    if (!viewController) {
+        return;
+    }
+
+    UIButton *oldHide = objc_getAssociatedObject(viewController, &K1);
+    if (oldHide) {
+        [oldHide removeFromSuperview];
+    }
+
+    UIButton *oldManage = objc_getAssociatedObject(viewController, &K2);
+    if (oldManage) {
+        [oldManage removeFromSuperview];
+    }
+
+    [viewController.view layoutIfNeeded];
+
+    UIView *panel = nil;
+    for (UIView *subview in viewController.view.subviews.reverseObjectEnumerator) {
+        if (subview != viewController.view &&
+            fabs(subview.bounds.size.width - 350.0) < 2.0 &&
+            fabs(subview.bounds.size.height - 430.0) < 2.0) {
+            panel = subview;
+            break;
+        }
+    }
+
+    UIView *host = panel ?: viewController.view;
+    CGRect bounds = host.bounds;
+
+    UIButton *hideButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    UIButton *manageButton = [UIButton buttonWithType:UIButtonTypeSystem];
+
+    hideButton.frame = CGRectMake(MAX(18.0, bounds.size.width - 192.0),
+                                  bounds.size.height - 54.0,
+                                  82.0,
+                                  30.0);
+
+    manageButton.frame = CGRectMake(MAX(108.0, bounds.size.width - 100.0),
+                                    bounds.size.height - 54.0,
+                                    82.0,
+                                    30.0);
+
+    hideButton.autoresizingMask =
+        UIViewAutoresizingFlexibleLeftMargin |
+        UIViewAutoresizingFlexibleTopMargin;
+
+    manageButton.autoresizingMask =
+        UIViewAutoresizingFlexibleLeftMargin |
+        UIViewAutoresizingFlexibleTopMargin;
+
+    [hideButton setTitle:@"Ocultar" forState:UIControlStateNormal];
+    hideButton.titleLabel.font =
+        [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+
+    [manageButton setTitle:@"Ocultos" forState:UIControlStateNormal];
+    manageButton.titleLabel.font =
+        [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+
+    [hideButton addTarget:PHCustomFiltersTarget.sharedTarget
+                    action:@selector(hide:)
+          forControlEvents:UIControlEventTouchUpInside];
+
+    [manageButton addTarget:PHCustomFiltersTarget.sharedTarget
+                      action:@selector(manage:)
+            forControlEvents:UIControlEventTouchUpInside];
+
+    [host addSubview:hideButton];
+    [host addSubview:manageButton];
+
+    objc_setAssociatedObject(viewController, &K1, hideButton,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(viewController, &K2, manageButton,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void (*Orig)(id, SEL, NSString *);
+
+static void Hook(id self, SEL cmd, NSString *data) {
+    if (Orig) {
+        Orig(self, cmd, data);
+    }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        PHAdd();
+    });
+}
+
+__attribute__((constructor))
+static void Init(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        Class c = NSClassFromString(@"PHInspectorViewController");
+        Method method = class_getInstanceMethod(c, @selector(showSelectedWebElement:));
+        if (!method) {
+            return;
+        }
+
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            Orig = (void (*)(id, SEL, NSString *))method_getImplementation(method);
+            method_setImplementation(method, (IMP)Hook);
+        });
+    });
+}
