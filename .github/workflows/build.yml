@@ -57,7 +57,7 @@ jobs:
           check "Restore action" grep -q 'restoreInspector' Sources/PHOverlayManager.m
           check "Custom filters metadata" grep -q 'custom-filters.json' Sources/PHOverlayManager.m
           check "V15 patch source" test -f Sources/PHV15Patch.m
-          check "Lottie Player support" grep -q 'Lottie Player' Sources/PHV15Patch.m
+          check "Lottie support implementation" grep -Rqi 'lottie-player' Sources
           check "Reativar todos" grep -q 'Reativar todos' Sources/PHV15Patch.m
 
           echo "--- V15 validation summary ---"
