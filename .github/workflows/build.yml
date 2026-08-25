@@ -37,7 +37,9 @@ jobs:
       - name: Prepare clean V13 source
         run: |
           set -euo pipefail
-          python3 Scripts/prepare_v12_clean.py
+          BASE='96953d9b1f6dbc9d55567d8a4b6e53c6c47dd502'
+          git fetch --no-tags origin "$BASE"
+          git checkout "$BASE" -- Sources/PHOverlayManager.m
 
       - name: Validate V13 source
         run: |
