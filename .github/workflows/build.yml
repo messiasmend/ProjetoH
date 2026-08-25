@@ -2,7 +2,7 @@ name: Build ProjetoH V12
 
 on:
   push:
-    branches: [v12-save-confirmation]
+    branches: [v12-gui-fix]
   workflow_dispatch:
 
 permissions:
@@ -37,6 +37,7 @@ jobs:
           set -euo pipefail
           test -f Sources/PHCustomFiltersManager.m
           test -f Sources/PHV12CustomFilters.m
+          test -f Sources/PHV12GUIFix.m
           grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
           grep -q 'PHNativeHideRule' Sources/PHCustomFiltersManager.m
           grep -q 'PHV12Pending' Sources/PHV12CustomFilters.m
@@ -46,6 +47,8 @@ jobs:
           grep -q 'Ocultos' Sources/PHV12CustomFilters.m
           grep -q 'Salvar' Sources/PHV12CustomFilters.m
           grep -q 'PHV12RestorePending' Sources/PHV12CustomFilters.m
+          grep -q 'PHV12GUIRebuildButtons' Sources/PHV12GUIFix.m
+          grep -q 'UIStackView' Sources/PHV12GUIFix.m
           grep -q 'Sources/PHV12CustomFilters.m' Makefile
 
       - name: Build package and dylib
