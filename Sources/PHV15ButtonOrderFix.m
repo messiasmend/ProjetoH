@@ -5,6 +5,8 @@
 - (void)render:(BOOL)hierarchyMode;
 @end
 
+static IMP PHV15OriginalRender = NULL;
+
 static void PHV15FindButtons(UIView *view, UIButton **ocultar, UIButton **ocultos) {
     if (!view) return;
     for (UIView *subview in view.subviews) {
@@ -41,9 +43,9 @@ static void PHV15ApplyButtonOrder(PHInspectorViewController *controller) {
 }
 
 static void PHV15RenderSwizzled(PHInspectorViewController *self, BOOL hierarchyMode) {
-    Method originalMethod = class_getInstanceMethod(NSClassFromString(@"PHInspectorViewController"), @selector(render:));
-    IMP originalIMP = method_getImplementation(originalMethod);
-    ((void (*)(id, SEL, BOOL))originalIMP)(self, @selector(render:), hierarchyMode);
+    if (PHV15OriginalRender) {
+        ((void (*)(id, SEL, BOOL))PHV15OriginalRender)(self, @selector(render:), hierarchyMode);
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
         PHV15ApplyButtonOrder(self);
     });
@@ -57,6 +59,7 @@ __attribute__((constructor)) static void PHV15InstallButtonOrderFix(void) {
         if (!render) return;
         IMP current = method_getImplementation(render);
         if (current == (IMP)PHV15RenderSwizzled) return;
+        PHV15OriginalRender = current;
         method_setImplementation(render, (IMP)PHV15RenderSwizzled);
     });
 }
