@@ -1,10 +1,8 @@
-name: Build ProjetoH V9.9
+name: Build ProjetoH V12
 
 on:
   push:
-    branches: [main, v9.6-gui-filters-fix, v9.9-gui-fix]
-  pull_request:
-    branches: [main]
+    branches: [v12-save-confirmation]
   workflow_dispatch:
 
 permissions:
@@ -12,11 +10,19 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
-
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Runner diagnostics
+        run: |
+          set -euo pipefail
+          sw_vers
+          uname -m
+          xcodebuild -version
+          python3 --version
+          git --version
 
       - name: Setup Theos
         uses: waruhachi/theos-action@v2.4.6
@@ -26,28 +32,28 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Apply V9.9 Inspector GUI fix
-        run: |
-          set -euo pipefail
-          python3 Scripts/apply_v9_9_gui_fix.py
-
-      - name: Validate V9.9 source
+      - name: Validate V12 source
         run: |
           set -euo pipefail
           test -f Sources/PHCustomFiltersManager.m
+          test -f Sources/PHV12CustomFilters.m
           grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
-          grep -q 'PHFriendlyName' Sources/PHCustomFiltersManager.m
-          grep -q 'Ocultar' Sources/PHCustomFiltersManager.m
-          grep -q 'Ocultos' Sources/PHCustomFiltersManager.m
-          grep -q 'UIStackView' Sources/PHOverlayManager.m
-          grep -q 'tag = 9002' Sources/PHOverlayManager.m
+          grep -q 'PHNativeHideRule' Sources/PHCustomFiltersManager.m
+          grep -q 'PHV12Pending' Sources/PHV12CustomFilters.m
+          grep -q 'Salvar alterações?' Sources/PHV12CustomFilters.m
+          grep -q 'css-display-none' Sources/PHV12CustomFilters.m
+          grep -q 'Ocultar' Sources/PHV12CustomFilters.m
+          grep -q 'Ocultos' Sources/PHV12CustomFilters.m
+          grep -q 'Salvar' Sources/PHV12CustomFilters.m
+          grep -q 'PHV12RestorePending' Sources/PHV12CustomFilters.m
+          grep -q 'Sources/PHV12CustomFilters.m' Makefile
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V9.9 dylib
+      - name: Collect and validate standalone V12 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -68,20 +74,17 @@ jobs:
             fi
           done <<< "$CANDIDATES"
           if [ -z "$DYLIB" ]; then
-            echo "Found candidate files, but none is a real Mach-O DYLIB."
+            echo "Found candidates, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V9.9.dylib
-          echo '--- Final ProjetoH V9.9 ---'
-          file artifacts/ProjetoH-V9.9.dylib
-          file -b artifacts/ProjetoH-V9.9.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V12.dylib
+          file artifacts/ProjetoH-V12.dylib
+          file -b artifacts/ProjetoH-V12.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V9.9 dylib
+      - name: Upload ProjetoH V12 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V9.9-dylib
-          path: artifacts/ProjetoH-V9.9.dylib
+          name: ProjetoH-V12-dylib
+          path: artifacts/ProjetoH-V12.dylib
           if-no-files-found: error
-
-# V9.9: rebuild Inspector controls as two Auto Layout rows; preserve filter/JSON behavior.
