@@ -34,29 +34,22 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Apply V12 GUI layout patch
+      - name: Prepare clean V12 source
         run: |
           set -euo pipefail
-          python3 Scripts/apply_v12_gui.py
+          python3 Scripts/prepare_v12_clean.py
 
-      - name: Finalize V12 custom-filters persistence
-        run: |
-          set -euo pipefail
-          python3 Scripts/finalize_v12.py
-
-      - name: Validate ProjetoH V12 source
+      - name: Validate V12 source
         run: |
           set -euo pipefail
           grep -Fq 'Ocultar' Sources/PHOverlayManager.m
           grep -Fq 'Ocultos' Sources/PHOverlayManager.m
-          grep -Fq 'Salvar' Sources/PHOverlayManager.m
-          grep -Fq 'PHPendingSelectors' Sources/PHOverlayManager.m
+          grep -Fq 'Salvar alterações?' Sources/PHOverlayManager.m
           grep -Fq 'ProjetoH.SavedSelectors' Sources/PHOverlayManager.m
           grep -Fq 'custom-filters.json' Sources/PHOverlayManager.m
           grep -Fq 'css-display-none' Sources/PHOverlayManager.m
+          grep -Fq '"trigger"' Sources/PHOverlayManager.m
           ! grep -Fq 'PHWriteFilters(@[])' Sources/PHOverlayManager.m
-          test ! -e Scripts/apply_v9_8_save_gui_persistence.py
-          test ! -e V9.8-BUILD-TRIGGER.txt
 
       - name: Build package and dylib
         run: |
