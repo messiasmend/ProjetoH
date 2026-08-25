@@ -34,6 +34,20 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
+      - name: Apply V15 button order fix
+        run: |
+          set -euo pipefail
+          python3 Scripts/apply_v15_button_order.py
+
+      - name: Validate V15 button order
+        run: |
+          set -euo pipefail
+          grep -q 'hidden.leadingAnchor' Sources/PHOverlayManager.m
+          grep -q 'hide.centerXAnchor' Sources/PHOverlayManager.m
+          grep -q 'save.trailingAnchor' Sources/PHOverlayManager.m
+          ! grep -q 'hide.leadingAnchor constraintEqualToAnchor:p.leadingAnchor' Sources/PHOverlayManager.m
+          ! grep -q 'hidden.centerXAnchor constraintEqualToAnchor:p.centerXAnchor' Sources/PHOverlayManager.m
+
       - name: Validate V14 source
         run: |
           set -euo pipefail
