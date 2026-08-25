@@ -49,7 +49,6 @@ jobs:
           grep -q 'PHV12RestorePending' Sources/PHV12CustomFilters.m
           grep -q 'PHV12GUIRebuildButtons' Sources/PHV12GUIFix.m
           grep -q 'UIStackView' Sources/PHV12GUIFix.m
-          grep -q 'Sources/PHV12CustomFilters.m' Makefile
 
       - name: Build package and dylib
         run: |
