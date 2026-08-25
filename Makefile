@@ -8,7 +8,7 @@ TWEAK_NAME = ProjetoH
 ProjetoH_FILES = Tweak.xm \
     Sources/PHThreeFingerGesture.m \
     Sources/PHOverlayManager.m \
-    Sources/PHV13Patch.m
+    Sources/PHV13PatchFixed.m
 
 ProjetoH_CFLAGS = -fobjc-arc
 ProjetoH_FRAMEWORKS = UIKit Foundation WebKit
