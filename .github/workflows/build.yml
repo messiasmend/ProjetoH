@@ -1,8 +1,8 @@
-name: Build ProjetoH V9.6
+name: Build ProjetoH V9.9
 
 on:
   push:
-    branches: [main, v9.6-gui-filters-fix]
+    branches: [main, v9.6-gui-filters-fix, v9.9-gui-fix]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -26,32 +26,28 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Apply V9.1 scrollable inspector layout
+      - name: Apply V9.9 Inspector GUI fix
         run: |
           set -euo pipefail
-          python3 Scripts/apply_v9_scroll_layout.py
+          python3 Scripts/apply_v9_9_gui_fix.py
 
-      - name: Apply V9.6 GUI row spacing fix
-        run: |
-          set -euo pipefail
-          python3 Scripts/apply_v9_6_gui_fix.py
-
-      - name: Validate V9.6 source
+      - name: Validate V9.9 source
         run: |
           set -euo pipefail
           test -f Sources/PHCustomFiltersManager.m
           grep -q 'custom-filters.json' Sources/PHCustomFiltersManager.m
-          grep -q 'action' Sources/PHCustomFiltersManager.m
           grep -q 'PHFriendlyName' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultar' Sources/PHCustomFiltersManager.m
           grep -q 'Ocultos' Sources/PHCustomFiltersManager.m
+          grep -q 'UIStackView' Sources/PHOverlayManager.m
+          grep -q 'tag = 9002' Sources/PHOverlayManager.m
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V9.6 dylib
+      - name: Collect and validate standalone V9.9 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -75,17 +71,17 @@ jobs:
             echo "Found candidate files, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V9.6.dylib
-          echo '--- Final ProjetoH V9.6 ---'
-          file artifacts/ProjetoH-V9.6.dylib
-          file -b artifacts/ProjetoH-V9.6.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V9.9.dylib
+          echo '--- Final ProjetoH V9.9 ---'
+          file artifacts/ProjetoH-V9.9.dylib
+          file -b artifacts/ProjetoH-V9.9.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V9.6 dylib
+      - name: Upload ProjetoH V9.9 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V9.6-dylib
-          path: artifacts/ProjetoH-V9.6.dylib
+          name: ProjetoH-V9.9-dylib
+          path: artifacts/ProjetoH-V9.9.dylib
           if-no-files-found: error
 
-# V9.6: fix hidden-filter names and place Ocultar/Ocultos below the existing inspector controls.
+# V9.9: rebuild Inspector controls as two Auto Layout rows; preserve filter/JSON behavior.
