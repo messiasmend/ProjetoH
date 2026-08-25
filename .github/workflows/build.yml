@@ -34,10 +34,10 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Apply base GUI patch
+      - name: Apply V12 GUI layout patch
         run: |
           set -euo pipefail
-          python3 Scripts/apply_v12_save_gui_persistence.py
+          python3 Scripts/apply_v12_gui.py
 
       - name: Finalize V12 custom-filters persistence
         run: |
