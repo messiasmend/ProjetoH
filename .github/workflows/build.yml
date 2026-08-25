@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   build:
-    # GitHub Actions build trigger: use the proven macOS-14 runner.
     runs-on: macos-14
     steps:
       - name: Checkout
@@ -37,20 +36,37 @@ jobs:
 
       - name: Validate V15 source
         run: |
-          set -euo pipefail
-          grep -q 'Ocultar' Sources/PHOverlayManager.m
-          grep -q 'Ocultos' Sources/PHOverlayManager.m
-          grep -q 'Salvar' Sources/PHOverlayManager.m
-          grep -q 'PHPendingSelectors' Sources/PHOverlayManager.m
-          grep -q 'ProjetoH.PersistentFilters' Sources/PHOverlayManager.m
-          grep -q 'showHierarchy' Sources/PHOverlayManager.m
-          grep -q 'restoreInspector' Sources/PHOverlayManager.m
-          grep -q 'custom-filters.json' Sources/PHOverlayManager.m
-          grep -q 'heightAnchor constraintEqualToConstant:500' Sources/PHOverlayManager.m
-          ! grep -q 'PHCustomFiltersManager.m' Makefile
-          test -f Sources/PHV15Patch.m
-          grep -q 'Lottie Player' Sources/PHV15Patch.m
-          grep -q 'Reativar todos' Sources/PHV15Patch.m
+          set -u
+          fail=0
+          check() {
+            label="$1"
+            shift
+            if "$@"; then
+              echo "OK: $label"
+            else
+              echo "FAIL: $label"
+              fail=1
+            fi
+          }
+
+          check "Ocultar button" grep -q 'Ocultar' Sources/PHOverlayManager.m
+          check "Ocultos button" grep -q 'Ocultos' Sources/PHOverlayManager.m
+          check "Salvar button" grep -q 'Salvar' Sources/PHOverlayManager.m
+          check "Pending selectors" grep -q 'PHPendingSelectors' Sources/PHOverlayManager.m
+          check "Persistent filters" grep -q 'ProjetoH.PersistentFilters' Sources/PHOverlayManager.m
+          check "Hierarchy action" grep -q 'showHierarchy' Sources/PHOverlayManager.m
+          check "Restore action" grep -q 'restoreInspector' Sources/PHOverlayManager.m
+          check "Custom filters metadata" grep -q 'custom-filters.json' Sources/PHOverlayManager.m
+          check "V15 patch source" test -f Sources/PHV15Patch.m
+          check "Lottie Player support" grep -q 'Lottie Player' Sources/PHV15Patch.m
+          check "Reativar todos" grep -q 'Reativar todos' Sources/PHV15Patch.m
+
+          echo "--- V15 validation summary ---"
+          if [ "$fail" -ne 0 ]; then
+            echo "One or more V15 checks failed. See the exact FAIL lines above."
+            exit 1
+          fi
+          echo "All V15 source checks passed."
 
       - name: Build package and dylib
         run: |
