@@ -1,6 +1,6 @@
 Package: com.messiasmend.projetoh
 Name: ProjetoH
-Version: 2.0.0
+Version: 14.0.0
 Architecture: iphoneos-arm64
 Description: Generic iOS element inspector foundation with reference-style sendEvent gesture activation.
 Maintainer: Messias
