@@ -46,7 +46,7 @@ jobs:
           grep -q 'showHierarchy' Sources/PHOverlayManager.m
           grep -q 'restoreInspector' Sources/PHOverlayManager.m
           grep -q 'custom-filters.json' Sources/PHOverlayManager.m
-          grep -q 'heightAnchor constraintEqualToConstant:560' Sources/PHOverlayManager.m
+          grep -q 'heightAnchor constraintEqualToConstant:500' Sources/PHOverlayManager.m
           ! grep -q 'PHCustomFiltersManager.m' Makefile
           test -f Sources/PHV15Patch.m
           grep -q 'Lottie Player' Sources/PHV15Patch.m
