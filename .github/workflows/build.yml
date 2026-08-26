@@ -48,7 +48,6 @@ jobs:
               fail=1
             fi
           }
-
           check "Ocultar button" grep -q 'Ocultar' Sources/PHV17ButtonOrderFix.m
           check "Ocultos button" grep -q 'Ocultos' Sources/PHV17ButtonOrderFix.m
           check "Salvar button" grep -q 'Salvar' Sources/PHV17ButtonOrderFix.m
@@ -60,12 +59,8 @@ jobs:
           check "V15 patch source" test -f Sources/PHV15Patch.m
           check "Lottie support implementation" grep -Rqi 'lottie-player' Sources
           check "Reativar todos" grep -q 'Reativar todos' Sources/PHV15Patch.m
-
           echo "--- V17 validation summary ---"
-          if [ "$fail" -ne 0 ]; then
-            echo "One or more V17 source checks failed."
-            exit 1
-          fi
+          if [ "$fail" -ne 0 ]; then exit 1; fi
           echo "All V17 source checks passed."
 
       - name: Build package and dylib
@@ -79,26 +74,15 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts
           CANDIDATES=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' -print)
-          if [ -z "$CANDIDATES" ]; then
-            echo "No staged ProjetoH.dylib found."
-            find .theos -type f | sort | tail -n 200
-            exit 1
-          fi
+          if [ -z "$CANDIDATES" ]; then exit 1; fi
           DYLIB=""
           while IFS= read -r candidate; do
             description=$(file -b "$candidate")
             echo "$candidate -> $description"
-            if echo "$description" | grep -q 'dynamically linked shared library'; then
-              DYLIB="$candidate"
-              break
-            fi
+            if echo "$description" | grep -q 'dynamically linked shared library'; then DYLIB="$candidate"; break; fi
           done <<< "$CANDIDATES"
-          if [ -z "$DYLIB" ]; then
-            echo "Found candidates, but none is a real Mach-O DYLIB."
-            exit 1
-          fi
+          if [ -z "$DYLIB" ]; then exit 1; fi
           cp "$DYLIB" artifacts/ProjetoH-V17.dylib
-          file artifacts/ProjetoH-V17.dylib
           file -b artifacts/ProjetoH-V17.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
