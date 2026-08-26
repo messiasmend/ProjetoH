@@ -10,7 +10,7 @@ ProjetoH_FILES = Tweak.xm \
     Sources/PHOverlayManager.m \
     Sources/PHV15Patch.m \
     Sources/PHV17ButtonOrderFix.m \
-    Sources/PHV18PreloadFilter.m
+    Sources/PHV19PreloadFilter.m
 
 ProjetoH_CFLAGS = -fobjc-arc
 ProjetoH_FRAMEWORKS = UIKit Foundation WebKit
