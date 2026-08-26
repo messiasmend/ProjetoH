@@ -9,7 +9,7 @@ ProjetoH_FILES = Tweak.xm \
     Sources/PHThreeFingerGesture.m \
     Sources/PHOverlayManager.m \
     Sources/PHV15Patch.m \
-    Sources/PHV16ButtonOrderFix.m
+    Sources/PHV17ButtonOrderFix.m
 
 ProjetoH_CFLAGS = -fobjc-arc
 ProjetoH_FRAMEWORKS = UIKit Foundation WebKit
