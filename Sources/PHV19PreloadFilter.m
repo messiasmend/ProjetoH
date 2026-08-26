@@ -4,8 +4,9 @@
 
 /* ProjetoH V20 preload filter.
  * Generic: no target application identifier is used.
- * V20 keeps the synchronous constructor hooks from V19 and additionally
- * injects the user script immediately before navigation/load APIs are called.
+ * Test mode: deliberately leaves the page unfiltered for 3 seconds,
+ * then installs the saved css-display-none rules. This isolates whether
+ * the visible element is coming from the page before our filter activates.
  */
 
 static NSString *PHV20FilterPath(void) {
@@ -49,7 +50,7 @@ static NSString *PHV20ScriptForSelectors(NSArray<NSString *> *selectors) {
     NSString *json = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"[]";
 
     return [NSString stringWithFormat:
-        @"(function(){var s=%@;if(!s.length)return;var id='projetoh-preload-style';function install(){if(document.getElementById(id))return;var st=document.createElement('style');st.id=id;st.setAttribute('data-projetoh-preload','1');st.textContent=s.map(function(x){return x+'{display:none !important;}'}).join('\\n');var p=document.head||document.documentElement;if(p)p.appendChild(st);}try{install();}catch(e){}try{new MutationObserver(function(){try{install();}catch(e){}}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}})();", json];
+        @"(function(){var s=%@;if(!s.length)return;var id='projetoh-preload-style';function install(){if(document.getElementById(id))return;var st=document.createElement('style');st.id=id;st.setAttribute('data-projetoh-preload','1');st.textContent=s.map(function(x){return x+'{display:none !important;}'}).join('\\n');var p=document.head||document.documentElement;if(p)p.appendChild(st);}setTimeout(function(){try{install();}catch(e){}try{new MutationObserver(function(){try{install();}catch(e){}}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}},3000);})();", json];
 }
 
 static void PHV20InjectIntoConfiguration(WKWebViewConfiguration *configuration) {
@@ -76,7 +77,7 @@ static void PHV20PrepareWebView(WKWebView *web) {
     PHV20InjectIntoConfiguration(web.configuration);
 }
 
-static IMP PHV20OriginalInitWithFrame = NULL;
+static IMP PHV20OriginalInitWithFrameConfiguration = NULL;
 static IMP PHV20OriginalInitWithCoder = NULL;
 static IMP PHV20OriginalLoadRequest = NULL;
 static IMP PHV20OriginalLoadHTML = NULL;
@@ -85,7 +86,7 @@ static IMP PHV20OriginalLoadData = NULL;
 
 static id PHV20InitWithFrameConfiguration(id self, SEL _cmd, CGRect frame, WKWebViewConfiguration *configuration) {
     PHV20InjectIntoConfiguration(configuration);
-    return ((id (*)(id, SEL, CGRect, WKWebViewConfiguration *))PHV20OriginalInitWithFrame)(self, _cmd, frame, configuration);
+    return ((id (*)(id, SEL, CGRect, WKWebViewConfiguration *))PHV20OriginalInitWithFrameConfiguration)(self, _cmd, frame, configuration);
 }
 
 static id PHV20InitWithCoder(id self, SEL _cmd, NSCoder *coder) {
@@ -119,7 +120,7 @@ __attribute__((constructor)) static void PHV20Install(void) {
 
     Method m = class_getInstanceMethod(cls, @selector(initWithFrame:configuration:));
     if (m) {
-        PHV20OriginalInitWithFrame = method_getImplementation(m);
+        PHV20OriginalInitWithFrameConfiguration = method_getImplementation(m);
         method_setImplementation(m, (IMP)PHV20InitWithFrameConfiguration);
     }
 
