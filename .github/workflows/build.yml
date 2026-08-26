@@ -1,10 +1,10 @@
-name: Build ProjetoH V15
+name: Build ProjetoH V16
 
 on:
   push:
-    branches: [main]
+    branches: [main, v16-build]
   pull_request:
-    branches: [main]
+    branches: [main, v16-build]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Validate V15 source
+      - name: Validate V16 source
         run: |
           set -u
           fail=0
@@ -57,22 +57,27 @@ jobs:
           check "Restore action" grep -q 'restoreInspector' Sources/PHOverlayManager.m
           check "Custom filters metadata" grep -q 'custom-filters.json' Sources/PHOverlayManager.m
           check "V15 patch source" test -f Sources/PHV15Patch.m
+          check "V16 patch source" test -f Sources/PHV16ButtonOrderFix.m
+          check "V16 required order" grep -q 'Ocultos' Sources/PHV16ButtonOrderFix.m
+          check "V16 hide action" grep -q 'hideTapped' Sources/PHV16ButtonOrderFix.m
+          check "V16 hidden action" grep -q 'hiddenTapped' Sources/PHV16ButtonOrderFix.m
+          check "V16 save button" grep -q 'Salvar' Sources/PHV16ButtonOrderFix.m
           check "Lottie support implementation" grep -Rqi 'lottie-player' Sources
           check "Reativar todos" grep -q 'Reativar todos' Sources/PHV15Patch.m
 
-          echo "--- V15 validation summary ---"
+          echo "--- V16 validation summary ---"
           if [ "$fail" -ne 0 ]; then
-            echo "One or more V15 checks failed. See the exact FAIL lines above."
+            echo "One or more V16 source checks failed. See the exact FAIL lines above."
             exit 1
           fi
-          echo "All V15 source checks passed."
+          echo "All V16 source checks passed."
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V15 dylib
+      - name: Collect and validate standalone V16 dylib
         shell: bash
         run: |
           set -euo pipefail
@@ -96,14 +101,14 @@ jobs:
             echo "Found candidates, but none is a real Mach-O DYLIB."
             exit 1
           fi
-          cp "$DYLIB" artifacts/ProjetoH-V15.dylib
-          file artifacts/ProjetoH-V15.dylib
-          file -b artifacts/ProjetoH-V15.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V16.dylib
+          file artifacts/ProjetoH-V16.dylib
+          file -b artifacts/ProjetoH-V16.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V15 dylib
+      - name: Upload ProjetoH V16 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V15-dylib
-          path: artifacts/ProjetoH-V15.dylib
+          name: ProjetoH-V16-dylib
+          path: artifacts/ProjetoH-V16.dylib
           if-no-files-found: error
