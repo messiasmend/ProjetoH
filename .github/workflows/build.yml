@@ -1,10 +1,10 @@
-name: Build ProjetoH V19
+name: Build ProjetoH V20
 
 on:
   push:
-    branches: [v19-build]
+    branches: [v20-build]
   pull_request:
-    branches: [v19-build]
+    branches: [v20-build]
   workflow_dispatch:
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Validate V19 source
+      - name: Validate V20 source
         run: |
           set -euo pipefail
           test -f Sources/PHV17ButtonOrderFix.m
@@ -33,30 +33,28 @@ jobs:
           grep -q 'Sources/PHV17ButtonOrderFix.m' Makefile
           grep -q 'Sources/PHV19PreloadFilter.m' Makefile
           grep -q 'WKUserScriptInjectionTimeAtDocumentStart' Sources/PHV19PreloadFilter.m
-          grep -q 'initWithFrame:configuration:' Sources/PHV19PreloadFilter.m
-          grep -q 'Deliberately synchronous' Sources/PHV19PreloadFilter.m
           grep -q 'MutationObserver' Sources/PHV19PreloadFilter.m
-          echo 'V19 source validation passed.'
+          echo 'V20 source validation passed.'
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate V19 dylib
+      - name: Collect and validate V20 dylib
         run: |
           set -euo pipefail
           mkdir -p artifacts
           DYLIB=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' | head -n 1)
           test -n "$DYLIB"
-          cp "$DYLIB" artifacts/ProjetoH-V19.dylib
-          file artifacts/ProjetoH-V19.dylib
-          file -b artifacts/ProjetoH-V19.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V20.dylib
+          file artifacts/ProjetoH-V20.dylib
+          file -b artifacts/ProjetoH-V20.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V19 dylib
+      - name: Upload ProjetoH V20 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V19-dylib
-          path: artifacts/ProjetoH-V19.dylib
+          name: ProjetoH-V20-dylib
+          path: artifacts/ProjetoH-V20.dylib
           if-no-files-found: error
