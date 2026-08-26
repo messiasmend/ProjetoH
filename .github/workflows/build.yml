@@ -1,10 +1,10 @@
-name: Build ProjetoH V20
+name: Build ProjetoH V21
 
 on:
   push:
-    branches: [v20-build]
+    branches: [v21-build]
   pull_request:
-    branches: [v20-build]
+    branches: [v21-build]
   workflow_dispatch:
 
 permissions:
@@ -25,41 +25,41 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Validate V20 source
+      - name: Validate V21 source
         run: |
           set -euo pipefail
-          test -f Sources/PHV17ButtonOrderFix.m
-          test -f Sources/PHV21FilterFormatFix.m
-          test ! -f Sources/PHV19PreloadFilter.m || ! grep -q 'Sources/PHV19PreloadFilter.m' Makefile
-          grep -q 'Sources/PHV17ButtonOrderFix.m' Makefile
-          grep -q 'Sources/PHV21FilterFormatFix.m' Makefile
-          grep -q 'css-display-none' Sources/PHV21FilterFormatFix.m
-          grep -q 'url-filter' Sources/PHV21FilterFormatFix.m
-          if grep -q 'WKUserScriptInjectionTimeAtDocumentStart' Makefile Sources/*.m; then
-            echo 'Unexpected WebKit preload hook remains in the V20 build.'
+          grep -q 'PHV15Patch.m' Makefile
+          grep -q 'css-display-none' Sources/PHV15Patch.m
+          grep -q 'url-filter' Sources/PHV15Patch.m
+          if grep -q 'NSTimer' Sources/PHV15Patch.m; then
+            echo 'Unexpected periodic timer remains in V21.'
             exit 1
           fi
-          echo 'V20 source validation passed.'
+          if grep -q 'WKUserScriptInjectionTimeAtDocumentStart' Makefile Sources/*.m; then
+            echo 'Unexpected WebKit preload hook remains in V21.'
+            exit 1
+          fi
+          echo 'V21 source validation passed.'
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate V20 dylib
+      - name: Collect and validate V21 dylib
         run: |
           set -euo pipefail
           mkdir -p artifacts
           DYLIB=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' | head -n 1)
           test -n "$DYLIB"
-          cp "$DYLIB" artifacts/ProjetoH-V20.dylib
-          file artifacts/ProjetoH-V20.dylib
-          file -b artifacts/ProjetoH-V20.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V21.dylib
+          file artifacts/ProjetoH-V21.dylib
+          file -b artifacts/ProjetoH-V21.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V20 dylib
+      - name: Upload ProjetoH V21 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V20-dylib
-          path: artifacts/ProjetoH-V20.dylib
+          name: ProjetoH-V21-dylib
+          path: artifacts/ProjetoH-V21.dylib
           if-no-files-found: error
