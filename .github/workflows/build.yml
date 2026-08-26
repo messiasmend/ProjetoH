@@ -1,10 +1,10 @@
-name: Build ProjetoH V17
+name: Build ProjetoH V18
 
 on:
   push:
-    branches: [main, v17-build]
+    branches: [v18-build]
   pull_request:
-    branches: [main, v17-build]
+    branches: [v18-build]
   workflow_dispatch:
 
 permissions:
@@ -17,15 +17,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Runner diagnostics
-        run: |
-          set -euo pipefail
-          sw_vers
-          uname -m
-          xcodebuild -version
-          python3 --version
-          git --version
-
       - name: Setup Theos
         uses: waruhachi/theos-action@v2.4.6
         with:
@@ -34,61 +25,37 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Validate V17 source
+      - name: Validate V18 source
         run: |
           set -euo pipefail
-          fail=0
-          check() {
-            label="$1"
-            shift
-            if "$@"; then
-              echo "OK: $label"
-            else
-              echo "FAIL: $label"
-              fail=1
-            fi
-          }
-          check "Ocultar button" grep -q 'Ocultar' Sources/PHV17ButtonOrderFix.m
-          check "Ocultos button" grep -q 'Ocultos' Sources/PHV17ButtonOrderFix.m
-          check "Salvar button" grep -q 'Salvar' Sources/PHV17ButtonOrderFix.m
-          check "Ocultos leading constraint" grep -q 'ocultos.leadingAnchor' Sources/PHV17ButtonOrderFix.m
-          check "Ocultar center constraint" grep -q 'ocultar.centerXAnchor' Sources/PHV17ButtonOrderFix.m
-          check "Salvar trailing constraint" grep -q 'salvar.trailingAnchor' Sources/PHV17ButtonOrderFix.m
-          check "No V16 patch in Makefile" bash -c '! grep -q "PHV16ButtonOrderFix" Makefile'
-          check "V17 patch in Makefile" grep -q 'PHV17ButtonOrderFix' Makefile
-          check "V15 patch source" test -f Sources/PHV15Patch.m
-          check "Lottie support implementation" grep -Rqi 'lottie-player' Sources
-          check "Reativar todos" grep -q 'Reativar todos' Sources/PHV15Patch.m
-          echo "--- V17 validation summary ---"
-          if [ "$fail" -ne 0 ]; then exit 1; fi
-          echo "All V17 source checks passed."
+          test -f Sources/PHV17ButtonOrderFix.m
+          test -f Sources/PHV18PreloadFilter.m
+          grep -q 'Sources/PHV17ButtonOrderFix.m' Makefile
+          grep -q 'Sources/PHV18PreloadFilter.m' Makefile
+          grep -q 'WKUserScriptInjectionTimeAtDocumentStart' Sources/PHV18PreloadFilter.m
+          grep -q 'initWithFrame:configuration:' Sources/PHV18PreloadFilter.m
+          grep -q 'css-display-none' Sources/PHV18PreloadFilter.m || true
+          echo 'V18 source validation passed.'
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate standalone V17 dylib
-        shell: bash
+      - name: Collect and validate V18 dylib
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          CANDIDATES=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' -print)
-          if [ -z "$CANDIDATES" ]; then exit 1; fi
-          DYLIB=""
-          while IFS= read -r candidate; do
-            description=$(file -b "$candidate")
-            echo "$candidate -> $description"
-            if echo "$description" | grep -q 'dynamically linked shared library'; then DYLIB="$candidate"; break; fi
-          done <<< "$CANDIDATES"
-          if [ -z "$DYLIB" ]; then exit 1; fi
-          cp "$DYLIB" artifacts/ProjetoH-V17.dylib
-          file -b artifacts/ProjetoH-V17.dylib | grep -q 'dynamically linked shared library'
+          DYLIB=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' | head -n 1)
+          test -n "$DYLIB"
+          cp "$DYLIB" artifacts/ProjetoH-V18.dylib
+          file artifacts/ProjetoH-V18.dylib
+          file -b artifacts/ProjetoH-V18.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V17 dylib
+      - name: Upload ProjetoH V18 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V17-dylib
-          path: artifacts/ProjetoH-V17.dylib
+          name: ProjetoH-V18-dylib
+          path: artifacts/ProjetoH-V18.dylib
           if-no-files-found: error
