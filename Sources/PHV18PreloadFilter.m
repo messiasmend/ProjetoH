@@ -2,6 +2,11 @@
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
+/* ProjetoH V18 preload filter.
+ * Generic: no target application identifier is used.
+ * Saved css-display-none filters are injected at DocumentStart, before page content is visibly interactive.
+ */
+
 static NSString *PH18FilterPath(void) {
     static NSString *cached;
     static dispatch_once_t onceToken;
@@ -53,8 +58,7 @@ static void PH18InjectIntoConfiguration(WKWebViewConfiguration *configuration) {
     if (!controller) return;
 
     static const void *kPH18Installed = &kPH18Installed;
-    NSNumber *installed = objc_getAssociatedObject(controller, kPH18Installed);
-    if (installed.boolValue) return;
+    if ([objc_getAssociatedObject(controller, kPH18Installed) boolValue]) return;
 
     NSString *source = PH18ScriptForSelectors(selectors);
     WKUserScript *script = [[WKUserScript alloc] initWithSource:source
@@ -64,22 +68,42 @@ static void PH18InjectIntoConfiguration(WKWebViewConfiguration *configuration) {
     objc_setAssociatedObject(controller, kPH18Installed, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-static IMP PH18OriginalInit = NULL;
+static IMP PH18OriginalInitWithFrame = NULL;
+static IMP PH18OriginalInitWithCoder = NULL;
 
 static id PH18InitWithFrameConfiguration(id self, SEL _cmd, CGRect frame, WKWebViewConfiguration *configuration) {
     PH18InjectIntoConfiguration(configuration);
-    return ((id (*)(id, SEL, CGRect, WKWebViewConfiguration *))PH18OriginalInit)(self, _cmd, frame, configuration);
+    return ((id (*)(id, SEL, CGRect, WKWebViewConfiguration *))PH18OriginalInitWithFrame)(self, _cmd, frame, configuration);
+}
+
+static id PH18InitWithCoder(id self, SEL _cmd, NSCoder *coder) {
+    id web = ((id (*)(id, SEL, NSCoder *))PH18OriginalInitWithCoder)(self, _cmd, coder);
+    if (web) PH18InjectIntoConfiguration([(WKWebView *)web configuration]);
+    return web;
 }
 
 __attribute__((constructor)) static void PHV18Install(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         Class cls = WKWebView.class;
-        SEL sel = @selector(initWithFrame:configuration:);
-        Method method = class_getInstanceMethod(cls, sel);
-        if (!method) return;
-        IMP current = method_getImplementation(method);
-        if (current == (IMP)PH18InitWithFrameConfiguration) return;
-        PH18OriginalInit = current;
-        method_setImplementation(method, (IMP)PH18InitWithFrameConfiguration);
+
+        SEL frameSEL = @selector(initWithFrame:configuration:);
+        Method frameMethod = class_getInstanceMethod(cls, frameSEL);
+        if (frameMethod) {
+            IMP current = method_getImplementation(frameMethod);
+            if (current != (IMP)PH18InitWithFrameConfiguration) {
+                PH18OriginalInitWithFrame = current;
+                method_setImplementation(frameMethod, (IMP)PH18InitWithFrameConfiguration);
+            }
+        }
+
+        SEL coderSEL = @selector(initWithCoder:);
+        Method coderMethod = class_getInstanceMethod(cls, coderSEL);
+        if (coderMethod) {
+            IMP current = method_getImplementation(coderMethod);
+            if (current != (IMP)PH18InitWithCoder) {
+                PH18OriginalInitWithCoder = current;
+                method_setImplementation(coderMethod, (IMP)PH18InitWithCoder);
+            }
+        }
     });
 }
