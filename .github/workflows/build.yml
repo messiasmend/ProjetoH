@@ -29,11 +29,16 @@ jobs:
         run: |
           set -euo pipefail
           test -f Sources/PHV17ButtonOrderFix.m
-          test -f Sources/PHV19PreloadFilter.m
+          test -f Sources/PHV21FilterFormatFix.m
+          test ! -f Sources/PHV19PreloadFilter.m || ! grep -q 'Sources/PHV19PreloadFilter.m' Makefile
           grep -q 'Sources/PHV17ButtonOrderFix.m' Makefile
-          grep -q 'Sources/PHV19PreloadFilter.m' Makefile
-          grep -q 'WKUserScriptInjectionTimeAtDocumentStart' Sources/PHV19PreloadFilter.m
-          grep -q 'MutationObserver' Sources/PHV19PreloadFilter.m
+          grep -q 'Sources/PHV21FilterFormatFix.m' Makefile
+          grep -q 'css-display-none' Sources/PHV21FilterFormatFix.m
+          grep -q 'url-filter' Sources/PHV21FilterFormatFix.m
+          if grep -q 'WKUserScriptInjectionTimeAtDocumentStart' Makefile Sources/*.m; then
+            echo 'Unexpected WebKit preload hook remains in the V20 build.'
+            exit 1
+          fi
           echo 'V20 source validation passed.'
 
       - name: Build package and dylib
