@@ -1,10 +1,10 @@
-name: Build ProjetoH V18
+name: Build ProjetoH V19
 
 on:
   push:
-    branches: [v18-build]
+    branches: [v19-build]
   pull_request:
-    branches: [v18-build]
+    branches: [v19-build]
   workflow_dispatch:
 
 permissions:
@@ -25,37 +25,38 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
-      - name: Validate V18 source
+      - name: Validate V19 source
         run: |
           set -euo pipefail
           test -f Sources/PHV17ButtonOrderFix.m
-          test -f Sources/PHV18PreloadFilter.m
+          test -f Sources/PHV19PreloadFilter.m
           grep -q 'Sources/PHV17ButtonOrderFix.m' Makefile
-          grep -q 'Sources/PHV18PreloadFilter.m' Makefile
-          grep -q 'WKUserScriptInjectionTimeAtDocumentStart' Sources/PHV18PreloadFilter.m
-          grep -q 'initWithFrame:configuration:' Sources/PHV18PreloadFilter.m
-          grep -q 'css-display-none' Sources/PHV18PreloadFilter.m || true
-          echo 'V18 source validation passed.'
+          grep -q 'Sources/PHV19PreloadFilter.m' Makefile
+          grep -q 'WKUserScriptInjectionTimeAtDocumentStart' Sources/PHV19PreloadFilter.m
+          grep -q 'initWithFrame:configuration:' Sources/PHV19PreloadFilter.m
+          grep -q 'Deliberately synchronous' Sources/PHV19PreloadFilter.m
+          grep -q 'MutationObserver' Sources/PHV19PreloadFilter.m
+          echo 'V19 source validation passed.'
 
       - name: Build package and dylib
         run: |
           set -euo pipefail
           make clean package FINALPACKAGE=1
 
-      - name: Collect and validate V18 dylib
+      - name: Collect and validate V19 dylib
         run: |
           set -euo pipefail
           mkdir -p artifacts
           DYLIB=$(find .theos -type f -path '*/Library/MobileSubstrate/DynamicLibraries/ProjetoH.dylib' | head -n 1)
           test -n "$DYLIB"
-          cp "$DYLIB" artifacts/ProjetoH-V18.dylib
-          file artifacts/ProjetoH-V18.dylib
-          file -b artifacts/ProjetoH-V18.dylib | grep -q 'dynamically linked shared library'
+          cp "$DYLIB" artifacts/ProjetoH-V19.dylib
+          file artifacts/ProjetoH-V19.dylib
+          file -b artifacts/ProjetoH-V19.dylib | grep -q 'dynamically linked shared library'
           ls -lah artifacts
 
-      - name: Upload ProjetoH V18 dylib
+      - name: Upload ProjetoH V19 dylib
         uses: actions/upload-artifact@v4
         with:
-          name: ProjetoH-V18-dylib
-          path: artifacts/ProjetoH-V18.dylib
+          name: ProjetoH-V19-dylib
+          path: artifacts/ProjetoH-V19.dylib
           if-no-files-found: error
