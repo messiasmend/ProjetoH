@@ -26,8 +26,8 @@ static void PHV17Reorder(UIViewController *controller) {
     UIButton *salvar = PHV17FindButton(root, @"Salvar");
     if (!ocultar || !ocultos || !salvar) return;
 
-    // Move the existing buttons by replacing only their horizontal constraints.
-    // Their titles, targets and actions remain untouched.
+    // Physical order is controlled by Auto Layout. Keep titles, targets and
+    // actions untouched; replace only the horizontal placement constraints.
     UIView *panel = ocultar.superview;
     if (panel != ocultos.superview || panel != salvar.superview) return;
 
@@ -48,9 +48,9 @@ static void PHV17Reorder(UIViewController *controller) {
     salvar.translatesAutoresizingMaskIntoConstraints = NO;
 
     [NSLayoutConstraint activateConstraints:@[
-        [ocultos.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor],
+        [ocultos.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:18],
         [ocultar.centerXAnchor constraintEqualToAnchor:panel.centerXAnchor],
-        [salvar.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor]
+        [salvar.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-18]
     ]];
 
     [panel setNeedsLayout];
