@@ -51,9 +51,9 @@ jobs:
           check "Ocultar button" grep -q 'Ocultar' Sources/PHV17ButtonOrderFix.m
           check "Ocultos button" grep -q 'Ocultos' Sources/PHV17ButtonOrderFix.m
           check "Salvar button" grep -q 'Salvar' Sources/PHV17ButtonOrderFix.m
-          check "Leading constraint" grep -q 'hidden.leadingAnchor' Sources/PHV17ButtonOrderFix.m
-          check "Center constraint" grep -q 'hide.centerXAnchor' Sources/PHV17ButtonOrderFix.m
-          check "Trailing constraint" grep -q 'save.trailingAnchor' Sources/PHV17ButtonOrderFix.m
+          check "Ocultos leading constraint" grep -q 'ocultos.leadingAnchor' Sources/PHV17ButtonOrderFix.m
+          check "Ocultar center constraint" grep -q 'ocultar.centerXAnchor' Sources/PHV17ButtonOrderFix.m
+          check "Salvar trailing constraint" grep -q 'salvar.trailingAnchor' Sources/PHV17ButtonOrderFix.m
           check "No V16 patch in Makefile" bash -c '! grep -q "PHV16ButtonOrderFix" Makefile'
           check "V17 patch in Makefile" grep -q 'PHV17ButtonOrderFix' Makefile
           check "V15 patch source" test -f Sources/PHV15Patch.m
