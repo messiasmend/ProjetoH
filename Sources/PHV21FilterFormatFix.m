@@ -1,12 +1,20 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
-/* ProjetoH filter-format compatibility fix.
- * Generic: no target application identifier is used.
- * The existing inspector saves selector-only entries. WebFrame's native
- * custom-filters.json format requires action + trigger entries. This patch
- * converts the saved entries immediately after the existing Save flow.
+/* ProjetoH V21 filter fix.
+ * Generic: no target bundle identifier is used.
+ *
+ * The native WebFrame format is:
+ *   { "action": { "type": "css-display-none", "selector": "..." },
+ *     "trigger": { "url-filter": ".*" } }
+ *
+ * The existing inspector stores a selector-only entry and currently builds
+ * fragile nth-of-type paths from the deepest clicked node.  This shim keeps
+ * the working V20/V21 UI flow, but at Save time asks the selected Web DOM for
+ * a stable selector, preferring a meaningful ancestor class (for example
+ * .q-page-sticky) over the generated nth-of-type path.
  */
 
 static NSString *PHV21FilterPath(void) {
@@ -27,13 +35,62 @@ static NSString *PHV21FilterPath(void) {
     return path;
 }
 
-static NSDictionary *PHV21NativeFilter(NSDictionary *filter) {
+static NSString *PHV21CSSSelectorForSelectedElement(WKWebView *webView) {
+    if (!webView) return nil;
+
+    __block NSString *selector = nil;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+
+    NSString *script = @"(function(){\
+var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');\
+if(!e)return '';\
+function esc(s){try{return CSS.escape(s)}catch(_){return s.replace(/[^a-zA-Z0-9_-]/g,'\\\\$&')}}\
+function unique(sel){try{return document.querySelectorAll(sel).length===1}catch(_){return false}}\
+function classCandidates(n){\
+  if(!n||typeof n.className!=='string')return [];\
+  var a=n.className.trim().split(/\\s+/).filter(Boolean);\
+  var preferred=a.filter(function(c){\
+    return c==='q-page-sticky'||c.indexOf('page-sticky')>=0||c.indexOf('floating')>=0||c.indexOf('component')>=0||c.indexOf('overlay')>=0||c.indexOf('panel')>=0;\
+  });\
+  var normal=a.filter(function(c){\
+    return ['row','col','flex','flex-center','justify-center','items-center','no-wrap','q-focus-helper','q-icon','q-btn','q-btn__content','q-btn-item','non-selectable','notranslate','material-icons','mobile','platform-ios','touch'].indexOf(c)<0;\
+  });\
+  return preferred.concat(normal.filter(function(c){return preferred.indexOf(c)<0;}));\
+}\
+function findStable(start){\
+  var n=start;\
+  while(n&&n.nodeType===1&&n!==document.body){\
+    if(n!==start&&n.id){var id='[id=\\\"'+esc(n.id)+'\\\"]';if(unique(id))return id;}\
+    var cs=classCandidates(n);\
+    for(var i=0;i<cs.length;i++){var s='.'+esc(cs[i]);if(unique(s))return s;}\
+    n=n.parentElement;\
+  }\
+  if(start.id){var sid='[id=\\\"'+esc(start.id)+'\\\"]';if(unique(sid))return sid;}\
+  var own=classCandidates(start);\
+  for(var j=0;j<own.length;j++){var os='.'+esc(own[j]);if(unique(os))return os;}\
+  return '';\
+}\
+var stable=findStable(e);\
+return stable||'';\
+})()";
+
+    [webView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
+        if (!error && [result isKindOfClass:NSString.class] && [(NSString *)result length]) selector = result;
+        dispatch_semaphore_signal(sem);
+    }];
+
+    if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) != 0) return nil;
+    return selector;
+}
+
+static NSDictionary *PHV21NativeFilter(NSDictionary *filter, NSString *selectorOverride) {
     if (![filter isKindOfClass:NSDictionary.class]) return nil;
 
     NSDictionary *action = [filter[@"action"] isKindOfClass:NSDictionary.class] ? filter[@"action"] : nil;
     NSDictionary *trigger = [filter[@"trigger"] isKindOfClass:NSDictionary.class] ? filter[@"trigger"] : nil;
 
-    NSString *selector = [action[@"selector"] isKindOfClass:NSString.class] ? action[@"selector"] : nil;
+    NSString *selector = selectorOverride.length ? selectorOverride : nil;
+    if (!selector.length) selector = [action[@"selector"] isKindOfClass:NSString.class] ? action[@"selector"] : nil;
     if (!selector.length) selector = [filter[@"selector"] isKindOfClass:NSString.class] ? filter[@"selector"] : nil;
     if (!selector.length) return nil;
 
@@ -51,7 +108,7 @@ static NSDictionary *PHV21NativeFilter(NSDictionary *filter) {
     };
 }
 
-static void PHV21NormalizeSavedFilters(void) {
+static void PHV21NormalizeSavedFilters(WKWebView *webView) {
     NSString *path = PHV21FilterPath();
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (!data) return;
@@ -62,9 +119,14 @@ static void PHV21NormalizeSavedFilters(void) {
     else if ([root isKindOfClass:NSArray.class]) filters = root;
     if (!filters) return;
 
+    NSString *stableSelector = PHV21CSSSelectorForSelectedElement(webView);
     NSMutableArray *native = [NSMutableArray arrayWithCapacity:filters.count];
-    for (NSDictionary *filter in filters) {
-        NSDictionary *converted = PHV21NativeFilter(filter);
+
+    for (NSUInteger i = 0; i < filters.count; i++) {
+        NSDictionary *filter = filters[i];
+        NSString *override = nil;
+        if (i == filters.count - 1 && stableSelector.length) override = stableSelector;
+        NSDictionary *converted = PHV21NativeFilter(filter, override);
         if (converted) [native addObject:converted];
     }
 
@@ -79,9 +141,12 @@ static void PHV21SavePendingFilters(id self, SEL _cmd) {
         ((void (*)(id, SEL))PHV21OriginalSave)(self, _cmd);
     }
 
-    // The original save is synchronous; normalize immediately so the native
-    // WebFrame filter engine receives the same structure as a manual filter.
-    PHV21NormalizeSavedFilters();
+    WKWebView *webView = nil;
+    @try { webView = [self valueForKey:@"highlightedWebView"]; } @catch (__unused NSException *e) {}
+
+    /* The selected DOM marker remains present after the original Save flow.
+     * Normalize synchronously so the file is complete when Save returns. */
+    PHV21NormalizeSavedFilters(webView);
 }
 
 __attribute__((constructor)) static void PHV21Install(void) {
