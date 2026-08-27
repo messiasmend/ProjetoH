@@ -10,10 +10,10 @@
  *   { "action": { "type": "css-display-none", "selector": "..." },
  *     "trigger": { "url-filter": ".*" } }
  *
- * The existing inspector stores a selector-only entry and currently builds
- * fragile nth-of-type paths from the deepest clicked node.  This shim keeps
- * the working V20/V21 UI flow, but at Save time asks the selected Web DOM for
- * a stable selector, preferring a meaningful ancestor class (for example
+ * The existing inspector stores selector-only entries and currently builds
+ * fragile nth-of-type paths from the deepest clicked node. This shim keeps
+ * the existing UI flow, but at Save time asks the selected DOM for a stable
+ * selector, preferring a meaningful ancestor class (for example
  * .q-page-sticky) over the generated nth-of-type path.
  */
 
@@ -33,54 +33,6 @@ static NSString *PHV21FilterPath(void) {
         if (!path.length) path = [home stringByAppendingPathComponent:@"Documents/custom-filters.json"];
     });
     return path;
-}
-
-static NSString *PHV21CSSSelectorForSelectedElement(WKWebView *webView) {
-    if (!webView) return nil;
-
-    __block NSString *selector = nil;
-    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-
-    NSString *script = @"(function(){\
-var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');\
-if(!e)return '';\
-function esc(s){try{return CSS.escape(s)}catch(_){return s.replace(/[^a-zA-Z0-9_-]/g,'\\\\$&')}}\
-function unique(sel){try{return document.querySelectorAll(sel).length===1}catch(_){return false}}\
-function classCandidates(n){\
-  if(!n||typeof n.className!=='string')return [];\
-  var a=n.className.trim().split(/\\s+/).filter(Boolean);\
-  var preferred=a.filter(function(c){\
-    return c==='q-page-sticky'||c.indexOf('page-sticky')>=0||c.indexOf('floating')>=0||c.indexOf('component')>=0||c.indexOf('overlay')>=0||c.indexOf('panel')>=0;\
-  });\
-  var normal=a.filter(function(c){\
-    return ['row','col','flex','flex-center','justify-center','items-center','no-wrap','q-focus-helper','q-icon','q-btn','q-btn__content','q-btn-item','non-selectable','notranslate','material-icons','mobile','platform-ios','touch'].indexOf(c)<0;\
-  });\
-  return preferred.concat(normal.filter(function(c){return preferred.indexOf(c)<0;}));\
-}\
-function findStable(start){\
-  var n=start;\
-  while(n&&n.nodeType===1&&n!==document.body){\
-    if(n!==start&&n.id){var id='[id=\\\"'+esc(n.id)+'\\\"]';if(unique(id))return id;}\
-    var cs=classCandidates(n);\
-    for(var i=0;i<cs.length;i++){var s='.'+esc(cs[i]);if(unique(s))return s;}\
-    n=n.parentElement;\
-  }\
-  if(start.id){var sid='[id=\\\"'+esc(start.id)+'\\\"]';if(unique(sid))return sid;}\
-  var own=classCandidates(start);\
-  for(var j=0;j<own.length;j++){var os='.'+esc(own[j]);if(unique(os))return os;}\
-  return '';\
-}\
-var stable=findStable(e);\
-return stable||'';\
-})()";
-
-    [webView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
-        if (!error && [result isKindOfClass:NSString.class] && [(NSString *)result length]) selector = result;
-        dispatch_semaphore_signal(sem);
-    }];
-
-    if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) != 0) return nil;
-    return selector;
 }
 
 static NSDictionary *PHV21NativeFilter(NSDictionary *filter, NSString *selectorOverride) {
@@ -108,7 +60,7 @@ static NSDictionary *PHV21NativeFilter(NSDictionary *filter, NSString *selectorO
     };
 }
 
-static void PHV21NormalizeSavedFilters(WKWebView *webView) {
+static void PHV21NormalizeSavedFilters(NSString *stableSelector) {
     NSString *path = PHV21FilterPath();
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (!data) return;
@@ -119,19 +71,46 @@ static void PHV21NormalizeSavedFilters(WKWebView *webView) {
     else if ([root isKindOfClass:NSArray.class]) filters = root;
     if (!filters) return;
 
-    NSString *stableSelector = PHV21CSSSelectorForSelectedElement(webView);
     NSMutableArray *native = [NSMutableArray arrayWithCapacity:filters.count];
-
     for (NSUInteger i = 0; i < filters.count; i++) {
         NSDictionary *filter = filters[i];
-        NSString *override = nil;
-        if (i == filters.count - 1 && stableSelector.length) override = stableSelector;
+        NSString *override = (i == filters.count - 1) ? stableSelector : nil;
         NSDictionary *converted = PHV21NativeFilter(filter, override);
         if (converted) [native addObject:converted];
     }
 
     NSData *out = [NSJSONSerialization dataWithJSONObject:native options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys error:nil];
     if (out) [out writeToFile:path atomically:YES];
+}
+
+static NSString *PHV21StableSelectorScript(void) {
+    return @"(function(){\
+var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');\
+if(!e)return '';\
+function esc(s){try{return CSS.escape(s)}catch(_){return s.replace(/[^a-zA-Z0-9_-]/g,'\\\\$&')}}\
+function unique(sel){try{return document.querySelectorAll(sel).length===1}catch(_){return false}}\
+function classCandidates(n){\
+  if(!n||typeof n.className!=='string')return [];\
+  var a=n.className.trim().split(/\\s+/).filter(Boolean);\
+  var preferred=a.filter(function(c){return c==='q-page-sticky'||c.indexOf('page-sticky')>=0||c.indexOf('floating')>=0||c.indexOf('component')>=0||c.indexOf('overlay')>=0||c.indexOf('panel')>=0;});\
+  var normal=a.filter(function(c){return ['row','col','flex','flex-center','justify-center','items-center','no-wrap','q-focus-helper','q-icon','q-btn','q-btn__content','q-btn-item','non-selectable','notranslate','material-icons','mobile','platform-ios','touch'].indexOf(c)<0;});\
+  return preferred.concat(normal.filter(function(c){return preferred.indexOf(c)<0;}));\
+}\
+function findStable(start){\
+  var n=start;\
+  while(n&&n.nodeType===1&&n!==document.body){\
+    if(n!==start&&n.id){var id='[id=\\\"'+esc(n.id)+'\\\"]';if(unique(id))return id;}\
+    var cs=classCandidates(n);\
+    for(var i=0;i<cs.length;i++){var s='.'+esc(cs[i]);if(unique(s))return s;}\
+    n=n.parentElement;\
+  }\
+  if(start.id){var sid='[id=\\\"'+esc(start.id)+'\\\"]';if(unique(sid))return sid;}\
+  var own=classCandidates(start);\
+  for(var j=0;j<own.length;j++){var os='.'+esc(own[j]);if(unique(os))return os;}\
+  return '';\
+}\
+return findStable(e);\
+})()";
 }
 
 static IMP PHV21OriginalSave = NULL;
@@ -144,9 +123,19 @@ static void PHV21SavePendingFilters(id self, SEL _cmd) {
     WKWebView *webView = nil;
     @try { webView = [self valueForKey:@"highlightedWebView"]; } @catch (__unused NSException *e) {}
 
-    /* The selected DOM marker remains present after the original Save flow.
-     * Normalize synchronously so the file is complete when Save returns. */
-    PHV21NormalizeSavedFilters(webView);
+    if (![webView isKindOfClass:WKWebView.class]) {
+        PHV21NormalizeSavedFilters(nil);
+        return;
+    }
+
+    /* Do not block the WebKit/main thread waiting for JavaScript. The original
+     * Save has already completed; we only rewrite the just-saved rule when the
+     * DOM returns the stable selector. */
+    NSString *script = PHV21StableSelectorScript();
+    [webView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
+        NSString *stable = (!error && [result isKindOfClass:NSString.class] && [(NSString *)result length]) ? result : nil;
+        PHV21NormalizeSavedFilters(stable);
+    }];
 }
 
 __attribute__((constructor)) static void PHV21Install(void) {
