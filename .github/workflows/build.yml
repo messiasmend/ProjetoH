@@ -31,13 +31,33 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+
           p = Path('Sources/PHOverlayManager.m')
           s = p.read_text()
-          # Remove the periodic filter timer structurally, independent of whitespace.
-          s, n1 = re.subn(r'^static\s+NSTimer\s*\*\s*PHApplyTimer\s*=\s*nil\s*;\s*$', '', s, flags=re.M)
-          s, n2 = re.subn(r'\s*dispatch_async\s*\(\s*dispatch_get_main_queue\(\)\s*,\s*\^\s*\{\s*PHApplyTimer\s*=\s*\[NSTimer\s+scheduledTimerWithTimeInterval\s*:\s*2\.0\s+repeats\s*:\s*YES\s+block\s*:\s*\^\s*\(__unused\s+NSTimer\s*\*\s*timer\s*\)\s*\{\s*\[\[PHOverlayManager\s+sharedManager\]\s+applyKnownWebViews\]\s*;\s*\}\s*\]\s*;\s*\}\s*\)\s*;?', '', s, flags=re.S)
+
+          # V21 must not contain the legacy periodic filter timer. Remove the
+          # declaration and the constructor block by structure, not exact whitespace.
+          s, n1 = re.subn(
+              r'\nstatic\s+NSTimer\s*\*\s*PHApplyTimer\s*=\s*nil\s*;\s*',
+              '\n', s, count=1
+          )
+          s, n2 = re.subn(
+              r'\n__attribute__\s*\(\(constructor\)\)\s*static\s+void\s+PHInit\s*\(\s*void\s*\)\s*\{.*?\}\s*\Z',
+              '\n', s, count=1, flags=re.S
+          )
+
+          # Safety net: if the constructor was formatted unexpectedly, remove
+          # everything from its unique marker to EOF. The constructor is the
+          # final block in this source file.
+          if 'scheduledTimerWithTimeInterval' in s:
+              marker = '__attribute__((constructor))'
+              pos = s.find(marker)
+              if pos >= 0:
+                  s = s[:pos].rstrip() + '\n'
+
           p.write_text(s)
-          print(f'removed timer declaration: {n1}, timer setup: {n2}')
+          print(f'removed timer declaration: {n1}, constructor: {n2}')
+          print('scheduledTimerWithTimeInterval remains:', 'scheduledTimerWithTimeInterval' in s)
           PY
 
       - name: Validate V21 source
