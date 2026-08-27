@@ -8,7 +8,6 @@ TWEAK_NAME = ProjetoH
 ProjetoH_FILES = Tweak.xm \
     Sources/PHThreeFingerGesture.m \
     Sources/PHOverlayManager.m \
-    Sources/PHV15Patch.m \
     Sources/PHV17ButtonOrderFix.m \
     Sources/PHV21FilterFormatFix.m
 
