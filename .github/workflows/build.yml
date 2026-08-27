@@ -30,11 +30,14 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path('Sources/PHOverlayManager.m')
           s = p.read_text()
-          s = s.replace('static NSTimer *PHApplyTimer = nil;\n', '')
-          s = s.replace('    dispatch_async(dispatch_get_main_queue(), ^{\n        PHApplyTimer=[NSTimer scheduledTimerWithTimeInterval:2.0 repeats:YES block:^(__unused NSTimer *timer){ [[PHOverlayManager sharedManager] applyKnownWebViews]; }];\n    });\n', '')
+          # Remove the V21 periodic apply timer structurally, independent of whitespace.
+          s, n1 = re.subn(r'^static\\s+NSTimer\\s*\\*\\s*PHApplyTimer\\s*=\\s*nil\\s*;\\s*$', '', s, flags=re.M)
+          s, n2 = re.subn(r'\\s*dispatch_async\\s*\\(\\s*dispatch_get_main_queue\\(\\)\\s*,\\s*\\^\\s*\\{\\s*PHApplyTimer\\s*=\\s*\\[NSTimer\\s+scheduledTimerWithTimeInterval\\s*:\\s*2\\.0\\s+repeats\\s*:\\s*YES\\s+block\\s*:\\s*\\^\\s*\\(__unused\\s+NSTimer\\s*\\*\\s*timer\\s*\\)\\s*\\{\\s*\\[\\[PHOverlayManager\\s+sharedManager\\]\\s+applyKnownWebViews\\]\\s*;\\s*\\}\\s*\\]\\s*;\\s*\\}\\s*\\)\\s*;?', '', s, flags=re.S)
           p.write_text(s)
+          print(f'removed timer declaration: {n1}, timer setup: {n2}')
           PY
 
       - name: Validate V21 source
