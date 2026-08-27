@@ -1,66 +1,44 @@
-# ProjetoH
+# WebHider 1.0
 
-## V2 — Reference-style activation foundation
+Tweak genérico para WebFrame/WebKit voltado à inspeção e ocultação de elementos de páginas.
 
-Esta versão reconstrói a fundação do ProjetoH a partir do fluxo observado na `LocationSpoofer-v2.dylib`, sem copiar o código da referência.
+## Protocolo Hider
 
-### Fluxo de ativação
+A versão 1.0 usa selectors CSS estáveis ao salvar elementos ocultados, evitando depender de caminhos estruturais frágeis com `nth-of-type(...)` quando existe um identificador estável disponível.
 
-```text
-Dylib carregada
-      |
-      v
-Inicialização do ProjetoH
-      |
-      v
-UIApplication / UIWindow
-      |
-      v
-sendEvent:
-      |
-      v
-PHThreeFingerGesture
-      |
-      +-- 3 toques qualificantes?
-      |       |
-      |       +-- não -> cancela timer / reseta estado
-      |       |
-      |       +-- sim -> arma NSTimer de 0,8 s
-      |
-      v
-trigger confirmado
-      |
-      v
-PHOverlayManager
-      |
-      v
-Inspector apresentado como modal overlay
+O filtro mantém o formato compatível com o WebFrame:
+
+```json
+{
+  "action": {
+    "type": "css-display-none",
+    "selector": ".q-page-sticky"
+  },
+  "trigger": {
+    "url-filter": ".*"
+  }
+}
 ```
 
-### V2 changes
+Elementos compostos podem gerar mais de uma regra de ocultação; isso é intencional quando necessário para alcançar o resultado visual completo.
 
-- Hook direto de `UIApplication -sendEvent:`.
-- Hook adicional de `UIWindow -sendEvent:` quando a classe expõe o seletor.
-- O evento original é executado antes da análise, como na referência.
-- O detector trabalha diretamente sobre `UIEvent.allTouches`.
-- O gesto usa 3 toques e hold de 0,8 s.
-- Timer executado na main run loop.
-- Estado de timer/trigger separado para evitar disparos repetidos.
-- GUI apresentada pelo `PHOverlayManager` sobre o controlador de topo, em vez de depender de uma janela independente.
-- Workflow valida que o artefato publicado é um Mach-O `DYLIB` real; arquivos dSYM não são aceitos como artefato.
+## Recursos
 
-### Artefato
+- Ativação por gesto de três toques.
+- Inspector de elementos Web.
+- Visualização da hierarquia DOM.
+- Ocultar e salvar elementos.
+- Persistência em `custom-filters.json`.
+- Tela de elementos ocultos.
+- Reativação individual ou de todos os filtros.
+- Aplicação dos filtros em todas as páginas WebView conhecidas.
 
-O GitHub Actions publica:
+## Escopo
 
-`ProjetoH-V2.dylib`
+O WebHider permanece genérico e não é amarrado ao Bundle Identifier de um aplicativo específico.
 
-O artefato é destinado ao fluxo de injeção direta na IPA. O pacote `.deb` continua sendo apenas uma saída auxiliar do build Theos.
+A base funcional desta versão é a V21 validada no aparelho. O nome comercial do tweak é **WebHider 1.0**; os prefixos internos `PH` foram preservados para evitar alterações desnecessárias na implementação já validada.
 
-### Escopo
+## Artefato
 
-O ProjetoH permanece genérico e não é amarrado a Bundle Identifier específico. A `LocationSpoofer-v2.dylib` é usada somente como referência técnica de comportamento e arquitetura; o código do ProjetoH é uma implementação própria.
-
-O Inspector de Elementos será construído sobre esta fundação depois que a ativação e a apresentação da GUI forem validadas no aparelho.
-
-<!-- ProjetoH V9 one-shot fix trigger -->
+O GitHub Actions publica `WebHider-1.0.dylib`, destinado ao fluxo de injeção direta na IPA.
