@@ -35,8 +35,8 @@ jobs:
           p = Path('Sources/PHOverlayManager.m')
           s = p.read_text()
 
-          # V21 must not contain the legacy periodic filter timer. Remove the
-          # declaration and the constructor block by structure, not exact whitespace.
+          # V21: remove the legacy periodic timer completely. WebFrame owns
+          # application of custom-filters.json; the tweak must not pollute pages.
           s, n1 = re.subn(
               r'\nstatic\s+NSTimer\s*\*\s*PHApplyTimer\s*=\s*nil\s*;\s*',
               '\n', s, count=1
@@ -45,19 +45,36 @@ jobs:
               r'\n__attribute__\s*\(\(constructor\)\)\s*static\s+void\s+PHInit\s*\(\s*void\s*\)\s*\{.*?\}\s*\Z',
               '\n', s, count=1, flags=re.S
           )
-
-          # Safety net: if the constructor was formatted unexpectedly, remove
-          # everything from its unique marker to EOF. The constructor is the
-          # final block in this source file.
           if 'scheduledTimerWithTimeInterval' in s:
               marker = '__attribute__((constructor))'
               pos = s.find(marker)
               if pos >= 0:
                   s = s[:pos].rstrip() + '\n'
 
+          # WebFrame's working custom-filters.json format is a top-level array.
+          # The previous tweak wrote {"version":1,"filters":[...]}, which is
+          # why a filter created by the tweak behaved differently from one
+          # entered manually and remained tied to the current WebView/page.
+          old = '''static BOOL PHWriteFilters(NSArray *filters) {
+    NSString *path = PHFilterPath();
+    [[NSFileManager defaultManager] createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"version": @1, @"filters": filters ?: @[] } options:0 error:nil];
+    return data && [data writeToFile:path atomically:YES];
+}'''
+          new = '''static BOOL PHWriteFilters(NSArray *filters) {
+    NSString *path = PHFilterPath();
+    [[NSFileManager defaultManager] createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:(filters ?: @[]) options:0 error:nil];
+    return data && [data writeToFile:path atomically:YES];
+}'''
+          if old not in s:
+              raise SystemExit('Expected PHWriteFilters implementation was not found.')
+          s = s.replace(old, new, 1)
+
           p.write_text(s)
           print(f'removed timer declaration: {n1}, constructor: {n2}')
-          print('scheduledTimerWithTimeInterval remains:', 'scheduledTimerWithTimeInterval' in s)
+          print('timer remains:', 'scheduledTimerWithTimeInterval' in s)
+          print('writes top-level array:', 'dataWithJSONObject:(filters ?: @[])' in s)
           PY
 
       - name: Validate V21 source
@@ -66,6 +83,7 @@ jobs:
           grep -q 'PHV15Patch.m' Makefile
           grep -q 'css-display-none' Sources/PHV15Patch.m
           grep -q 'url-filter' Sources/PHV15Patch.m
+          grep -q 'dataWithJSONObject:(filters ?: @\[\])' Sources/PHOverlayManager.m
           if grep -R -q 'scheduledTimerWithTimeInterval' Sources/*.m; then
             echo 'Unexpected periodic timer remains in V21.'
             exit 1
