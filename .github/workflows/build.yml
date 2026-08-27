@@ -25,13 +25,25 @@ jobs:
           sdks-src: theos/sdks
           sdks-branch: master
 
+      - name: Prepare V21 source
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Sources/PHOverlayManager.m')
+          s = p.read_text()
+          s = s.replace('static NSTimer *PHApplyTimer = nil;\n', '')
+          s = s.replace('    dispatch_async(dispatch_get_main_queue(), ^{\n        PHApplyTimer=[NSTimer scheduledTimerWithTimeInterval:2.0 repeats:YES block:^(__unused NSTimer *timer){ [[PHOverlayManager sharedManager] applyKnownWebViews]; }];\n    });\n', '')
+          p.write_text(s)
+          PY
+
       - name: Validate V21 source
         run: |
           set -euo pipefail
           grep -q 'PHV15Patch.m' Makefile
           grep -q 'css-display-none' Sources/PHV15Patch.m
           grep -q 'url-filter' Sources/PHV15Patch.m
-          if grep -q 'scheduledTimerWithTimeInterval' Sources/PHV15Patch.m; then
+          if grep -R -q 'scheduledTimerWithTimeInterval' Sources/*.m; then
             echo 'Unexpected periodic timer remains in V21.'
             exit 1
           fi
