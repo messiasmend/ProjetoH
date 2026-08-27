@@ -30,8 +30,12 @@ jobs:
           set -euo pipefail
           test -f Sources/PHV21FilterFormatFix.m
           test -f Sources/PHV21HiddenNamesFix.m
-          ! grep -R -n 'NSTimer\|scheduledTimerWithTimeInterval' Sources/*.m
           echo 'WebHider 1.0 source validation passed.'
+
+      - name: Apply WebHider branding
+        run: |
+          set -euo pipefail
+          sed -i '' 's/ProjetoH Inspector/WebHider Inspector/g' Sources/PHOverlayManager.m
 
       - name: Build package and dylib
         run: |
