@@ -2,15 +2,12 @@
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
-/* ProjetoH V21 — generic.
- * Preserve WebFrame's original selection/hide/save behavior.
- * V21 adds only: global URL scope + metadata. No periodic timer.
- */
+/* ProjetoH V21 — generic. Preserve WebFrame's original selection/hide/save behavior. */
 static NSString *PH21FilterPath(void){static NSString*p;static dispatch_once_t once;dispatch_once(&once,^{NSString*h=NSHomeDirectory();NSDirectoryEnumerator*e=[NSFileManager.defaultManager enumeratorAtPath:h];NSString*r;while((r=[e nextObject]))if([r.lastPathComponent.lowercaseString isEqualToString:@"custom-filters.json"]){p=[h stringByAppendingPathComponent:r];break;}if(!p.length)p=[h stringByAppendingPathComponent:@"Documents/custom-filters.json"];});return p;}
 static NSString *PH21MetadataPath(void){return [PH21FilterPath().stringByDeletingLastPathComponent stringByAppendingPathComponent:@"projetoh-metadata.json"];}
 static NSMutableDictionary *PH21FilterRoot(void){NSData*d=[NSData dataWithContentsOfFile:PH21FilterPath()];id j=d?[NSJSONSerialization JSONObjectWithData:d options:NSJSONReadingMutableContainers error:nil]:nil;return [j isKindOfClass:NSDictionary.class]?[j mutableCopy]:[NSMutableDictionary dictionary];}
 static NSArray *PH21Filters(void){id f=PH21FilterRoot()[@"filters"];return [f isKindOfClass:NSArray.class]?f:@[];}
-static BOOL PH21WriteFilters(NSArray*f){NSMutableDictionary*r=PH21FilterRoot();r[@"filters"]=f?:@[];if(!r[@"version"])r[@"version"]=@1;NSData*d=[NSJSONSerialization dataWithJSONObject:r options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];return d&&[d writeToFile:PH21FilterPath() atomically:YES;}
+static BOOL PH21WriteFilters(NSArray*f){NSMutableDictionary*r=PH21FilterRoot();r[@"filters"]=f?:@[];if(!r[@"version"])r[@"version"]=@1;NSData*d=[NSJSONSerialization dataWithJSONObject:r options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];return d&&[d writeToFile:PH21FilterPath() atomically:YES];}
 static NSString *PH21Selector(NSDictionary*f){if(![f isKindOfClass:NSDictionary.class])return nil;id s=f[@"selector"];if([s isKindOfClass:NSString.class]&&[s length])return s;NSDictionary*a=[f[@"action"] isKindOfClass:NSDictionary.class]?f[@"action"]:nil;s=a[@"selector"];return [s isKindOfClass:NSString.class]&&[s length]?s:nil;}
 static NSMutableDictionary *PH21Metadata(void){NSData*d=[NSData dataWithContentsOfFile:PH21MetadataPath()];id j=d?[NSJSONSerialization JSONObjectWithData:d options:NSJSONReadingMutableContainers error:nil]:nil;NSDictionary*e=[j isKindOfClass:NSDictionary.class]&&[j[@"elements"] isKindOfClass:NSDictionary.class]?j[@"elements"]:nil;return e?[e mutableCopy]:[NSMutableDictionary dictionary];}
 static void PH21WriteMetadata(NSDictionary*e){if(!e.count){[NSFileManager.defaultManager removeItemAtPath:PH21MetadataPath() error:nil];return;}NSDictionary*r=@{@"version":@1,@"elements":e};NSData*d=[NSJSONSerialization dataWithJSONObject:r options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];if(d)[d writeToFile:PH21MetadataPath() atomically:YES];}
@@ -20,10 +17,10 @@ static id PH21CurrentWebView(id self){@try{return [self valueForKey:@"highlighte
 static id PH21Inspector(id self){@try{return [self valueForKey:@"inspectorViewController"]; }@catch(__unused NSException*e){return nil;}}
 static void PH21Swizzle(Class c,SEL a,SEL b){if(!c)return;Method x=class_getInstanceMethod(c,a),y=class_getInstanceMethod(c,b);if(x&&y)method_exchangeImplementations(x,y);}
 
-/* Capture only metadata. The original WebFrame hide method remains authoritative. */
+/* Metadata capture is secondary. WebFrame remains authoritative for hiding. */
 static void PH21CaptureSelected(WKWebView*web){if(!web)return;NSString*js=@"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(!e)return '{}';function p(n){if(n.id)return '#'+CSS.escape(n.id);var a=[];while(n&&n.nodeType===1&&n!==document.body){var q=n.parentElement;if(!q)break;var same=[...q.children].filter(function(c){return c.tagName===n.tagName});a.unshift(n.tagName.toLowerCase()+':nth-of-type('+(same.indexOf(n)+1)+')');n=q;}return a.join(' > ');}return JSON.stringify({selector:p(e),tag:e.tagName.toLowerCase(),id:e.id||'',className:typeof e.className==='string'?e.className:'',text:(e.innerText||e.textContent||'').trim().replace(/\\s+/g,' ').slice(0,180),ariaLabel:e.getAttribute('aria-label')||'',title:e.getAttribute('title')||''});})()";[web evaluateJavaScript:js completionHandler:^(id result,__unused NSError*error){if(![result isKindOfClass:NSString.class])return;NSData*d=[(NSString*)result dataUsingEncoding:NSUTF8StringEncoding];NSDictionary*m=d?[NSJSONSerialization JSONObjectWithData:d options:0 error:nil]:nil;NSString*s=[m[@"selector"] isKindOfClass:NSString.class]?m[@"selector"]:nil;if(s.length){if(!PH21Pending)PH21Pending=[NSMutableDictionary dictionary];PH21Pending[s]=m;}}];}
 
-/* Only widen the URL trigger. Never rewrite selector/action or other filter fields. */
+/* Preserve every existing filter field; only make the URL trigger global. */
 static void PH21MakeFiltersGlobal(void){NSArray*old=PH21Filters();if(!old.count)return;NSMutableArray*out=[NSMutableArray arrayWithCapacity:old.count];BOOL changed=NO;for(id obj in old){if(![obj isKindOfClass:NSDictionary.class]){[out addObject:obj];continue;}NSMutableDictionary*f=[obj mutableCopy];NSMutableDictionary*trigger=[f[@"trigger"] isKindOfClass:NSDictionary.class]?[f[@"trigger"] mutableCopy]:nil;if(trigger){id u=trigger[@"url-filter"];if([u isKindOfClass:NSString.class]&&![(NSString*)u isEqualToString:@".*"]){trigger[@"url-filter"]=@".*";f[@"trigger"]=trigger;changed=YES;}}[out addObject:f];}if(changed)PH21WriteFilters(out);}
 static void PH21SyncSavedMetadata(void){NSArray*f=PH21Filters();NSMutableDictionary*m=PH21Metadata();NSMutableSet*live=[NSMutableSet set];for(NSDictionary*x in f){NSString*s=PH21Selector(x);if(s.length)[live addObject:s];}for(NSString*s in m.allKeys.copy)if(![live containsObject:s])[m removeObjectForKey:s];[PH21Pending enumerateKeysAndObjectsUsingBlock:^(NSString*s,NSDictionary*v,BOOL*stop){if([live containsObject:s])m[s]=v;}];PH21WriteMetadata(m);}
 
@@ -31,16 +28,15 @@ static void PH21SyncSavedMetadata(void){NSArray*f=PH21Filters();NSMutableDiction
 @implementation NSObject(PHV21)
 
 - (void)ph21_hideSelectedElement {
-    /* IMPORTANT: invoke WebFrame first. This preserves the proven zero-delay hide path. */
+    /* Original hide runs first: preserves the proven zero-delay removal path. */
     [self ph21_hideSelectedElement];
-    /* Metadata capture is secondary and cannot block/interfere with hiding. */
     PH21CaptureSelected(PH21CurrentWebView(self));
 }
 
 - (void)ph21_savePendingFilters {
-    /* Let the original WebFrame save happen first, unchanged. */
+    /* Original WebFrame save runs unchanged. */
     [self ph21_savePendingFilters];
-    /* One main-queue turn only: no periodic timer and no 2-second polling. */
+    /* One main-queue turn, not a periodic timer. This runs after the original save call returns. */
     dispatch_async(dispatch_get_main_queue(), ^{
         PH21MakeFiltersGlobal();
         PH21SyncSavedMetadata();
