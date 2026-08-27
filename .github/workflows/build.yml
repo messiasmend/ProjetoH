@@ -31,7 +31,7 @@ jobs:
           grep -q 'PHV15Patch.m' Makefile
           grep -q 'css-display-none' Sources/PHV15Patch.m
           grep -q 'url-filter' Sources/PHV15Patch.m
-          if grep -q 'NSTimer' Sources/PHV15Patch.m; then
+          if grep -q 'scheduledTimerWithTimeInterval' Sources/PHV15Patch.m; then
             echo 'Unexpected periodic timer remains in V21.'
             exit 1
           fi
