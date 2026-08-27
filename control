@@ -1,8 +1,8 @@
-Package: com.messiasmend.projetoh
-Name: ProjetoH
-Version: 2.0.0
+Package: com.messiasmend.webhider
+Name: WebHider
+Version: 1.0.0
 Architecture: iphoneos-arm64
-Description: Generic iOS element inspector foundation with reference-style sendEvent gesture activation.
+Description: WebFrame element hider with stable CSS selector saving and hidden-element management.
 Maintainer: Messias
 Author: Messias
 Section: Tweaks
