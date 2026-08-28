@@ -6,7 +6,7 @@
 
 /* Same runtime key used by PHV23JSONNoFlash.m. */
 static const void *PHJSONModeSharedKey(void) {
-    return (const void *)NSClassFromString(@"PHInspectorViewController");
+    return @selector(ph_jsonTapped);
 }
 static const void *PHJSONTextKey = &PHJSONTextKey;
 static IMP PHOriginalRender = NULL;
