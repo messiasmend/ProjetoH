@@ -4,6 +4,7 @@
 #import <objc/runtime.h>
 
 static const void *PHJSONModeKey = &PHJSONModeKey;
+static const void *PHJSONTextKey = &PHJSONTextKey;
 
 static BOOL PHIsJSONMode(id obj) {
     return [objc_getAssociatedObject(obj, PHJSONModeKey) boolValue];
@@ -23,7 +24,7 @@ static UIView *PHFindSubviewOfClass(UIView *root, Class cls) {
 }
 
 static UIButton *PHFindButton(UIView *root, NSString *title) {
-    if ([root isKindOfClass:UIButton.class] && [[[((UIButton *)root) titleForState:UIControlStateNormal] ?: @""] isEqualToString:title]) return (UIButton *)root;
+    if ([root isKindOfClass:UIButton.class] && [[((UIButton *)root) titleForState:UIControlStateNormal] isEqualToString:title]) return (UIButton *)root;
     for (UIView *sub in root.subviews) {
         UIButton *found = PHFindButton(sub, title);
         if (found) return found;
@@ -93,9 +94,7 @@ static void PHConfigureJSONScreen(id self) {
     if (subtitle) subtitle.text = @"Filtro JSON";
     NSString *details = [self valueForKey:@"currentDetails"];
     NSString *selector = PHSelectorFromHierarchy(details);
-    if (!selector.length) {
-        selector = PHSelectorFromHierarchy([self valueForKey:@"detailsBeforeHierarchy"]);
-    }
+    if (!selector.length) selector = PHSelectorFromHierarchy([self valueForKey:@"detailsBeforeHierarchy"]);
     NSString *json = PHBuildFilterJSON(selector);
     UILabel *content = PHFindContentLabel(scroll);
     if (content) {
@@ -109,7 +108,7 @@ static void PHConfigureJSONScreen(id self) {
         [left removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
         [left addTarget:self action:@selector(backTapped) forControlEvents:UIControlEventTouchUpInside];
     }
-    [objc_setAssociatedObject(self, @"PHJSONTextKey", json, OBJC_ASSOCIATION_COPY_NONATOMIC) self];
+    objc_setAssociatedObject(self, PHJSONTextKey, json, OBJC_ASSOCIATION_COPY_NONATOMIC);
 }
 
 @interface PHV22JSONBridge : NSObject
@@ -120,11 +119,8 @@ static void PHConfigureJSONScreen(id self) {
 - (void)ph_render_json:(BOOL)hierarchyMode {
     BOOL jsonMode = PHIsJSONMode(self);
     ((void (*)(id, SEL, BOOL))objc_msgSend)(self, @selector(ph_render_json:), jsonMode ? NO : hierarchyMode);
-    if (jsonMode) {
-        PHConfigureJSONScreen(self);
-    } else if (hierarchyMode) {
-        PHConfigureHierarchyButton(self);
-    }
+    if (jsonMode) PHConfigureJSONScreen(self);
+    else if (hierarchyMode) PHConfigureHierarchyButton(self);
 }
 
 - (void)ph_jsonTapped {
@@ -134,7 +130,7 @@ static void PHConfigureJSONScreen(id self) {
 
 - (void)ph_copyTapped {
     if (PHIsJSONMode(self)) {
-        NSString *json = objc_getAssociatedObject(self, @"PHJSONTextKey");
+        NSString *json = objc_getAssociatedObject(self, PHJSONTextKey);
         UIPasteboard.generalPasteboard.string = json ?: @"";
         return;
     }
@@ -142,9 +138,7 @@ static void PHConfigureJSONScreen(id self) {
 }
 
 - (void)ph_backTapped {
-    if (PHIsJSONMode(self)) {
-        PHSetJSONMode(self, NO);
-    }
+    if (PHIsJSONMode(self)) PHSetJSONMode(self, NO);
     ((void (*)(id, SEL))objc_msgSend)(self, @selector(ph_backTapped));
 }
 
@@ -154,33 +148,28 @@ static void PHConfigureJSONScreen(id self) {
 }
 
 + (void)load {
-    dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        dispatch_async(dispatch_get_main_queue(), ^{
-            Class target = NSClassFromString(@"PHInspectorViewController");
-            if (!target) return;
-            Class bridge = self;
+    Class target = NSClassFromString(@"PHInspectorViewController");
+    if (!target) return;
+    Class bridge = self;
 
-            Method render = class_getInstanceMethod(target, @selector(render:));
-            Method bridgeRender = class_getInstanceMethod(bridge, @selector(ph_render_json:));
-            class_addMethod(target, @selector(ph_render_json:), method_getImplementation(bridgeRender), method_getTypeEncoding(bridgeRender));
-            method_exchangeImplementations(render, class_getInstanceMethod(target, @selector(ph_render_json:)));
+    Method render = class_getInstanceMethod(target, @selector(render:));
+    Method bridgeRender = class_getInstanceMethod(bridge, @selector(ph_render_json:));
+    class_addMethod(target, @selector(ph_render_json:), method_getImplementation(bridgeRender), method_getTypeEncoding(bridgeRender));
+    method_exchangeImplementations(render, class_getInstanceMethod(target, @selector(ph_render_json:)));
 
-            Method copy = class_getInstanceMethod(target, @selector(copyTapped));
-            Method bridgeCopy = class_getInstanceMethod(bridge, @selector(ph_copyTapped));
-            class_addMethod(target, @selector(ph_copyTapped), method_getImplementation(bridgeCopy), method_getTypeEncoding(bridgeCopy));
-            method_exchangeImplementations(copy, class_getInstanceMethod(target, @selector(ph_copyTapped)));
+    Method copy = class_getInstanceMethod(target, @selector(copyTapped));
+    Method bridgeCopy = class_getInstanceMethod(bridge, @selector(ph_copyTapped));
+    class_addMethod(target, @selector(ph_copyTapped), method_getImplementation(bridgeCopy), method_getTypeEncoding(bridgeCopy));
+    method_exchangeImplementations(copy, class_getInstanceMethod(target, @selector(ph_copyTapped)));
 
-            Method back = class_getInstanceMethod(target, @selector(backTapped));
-            Method bridgeBack = class_getInstanceMethod(bridge, @selector(ph_backTapped));
-            class_addMethod(target, @selector(ph_backTapped), method_getImplementation(bridgeBack), method_getTypeEncoding(bridgeBack));
-            method_exchangeImplementations(back, class_getInstanceMethod(target, @selector(ph_backTapped)));
+    Method back = class_getInstanceMethod(target, @selector(backTapped));
+    Method bridgeBack = class_getInstanceMethod(bridge, @selector(ph_backTapped));
+    class_addMethod(target, @selector(ph_backTapped), method_getImplementation(bridgeBack), method_getTypeEncoding(bridgeBack));
+    method_exchangeImplementations(back, class_getInstanceMethod(target, @selector(ph_backTapped)));
 
-            Method details = class_getInstanceMethod(target, @selector(showInspectorDetails:subtitle:));
-            Method bridgeDetails = class_getInstanceMethod(bridge, @selector(ph_showInspectorDetails:subtitle:));
-            class_addMethod(target, @selector(ph_showInspectorDetails:subtitle:), method_getImplementation(bridgeDetails), method_getTypeEncoding(bridgeDetails));
-            method_exchangeImplementations(details, class_getInstanceMethod(target, @selector(ph_showInspectorDetails:subtitle:)));
-        });
-    });
+    Method details = class_getInstanceMethod(target, @selector(showInspectorDetails:subtitle:));
+    Method bridgeDetails = class_getInstanceMethod(bridge, @selector(ph_showInspectorDetails:subtitle:));
+    class_addMethod(target, @selector(ph_showInspectorDetails:subtitle:), method_getImplementation(bridgeDetails), method_getTypeEncoding(bridgeDetails));
+    method_exchangeImplementations(details, class_getInstanceMethod(target, @selector(ph_showInspectorDetails:subtitle:)));
 }
 @end
