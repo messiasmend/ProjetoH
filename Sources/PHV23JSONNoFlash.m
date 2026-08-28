@@ -3,9 +3,12 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 
-/* Same associated-object key used by PHV22JSONUI.m. A selector is a
-   process-wide Objective-C identifier, so both files address the same state. */
-static const void *PHJSONModeSharedKey = (const void *)@selector(ph_jsonModeMarker);
+/* Shared runtime key: both JSON modules use the same class object as the
+   associated-object key. This avoids cross-file static-key mismatches and
+   does not rely on casting an Objective-C selector expression. */
+static const void *PHJSONModeSharedKey(void) {
+    return (const void *)NSClassFromString(@"PHInspectorViewController");
+}
 static const void *PHNoFlashWantsJSONKey = &PHNoFlashWantsJSONKey;
 static IMP PHNoFlashOriginalButton = NULL;
 static IMP PHNoFlashOriginalHierarchy = NULL;
@@ -19,14 +22,11 @@ static void PHNoFlashSetWantsJSON(id obj, BOOL value) {
 }
 
 static void PHNoFlashJSONTapped(id self, SEL _cmd) {
-    /* This implementation lives in the no-flash hook itself. It therefore
-       does not depend on +load ordering between the two source files. */
-    objc_setAssociatedObject(self, PHJSONModeSharedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, PHJSONModeSharedKey(), @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     ((void (*)(id, SEL, BOOL))objc_msgSend)(self, @selector(render:), YES);
 }
 
 static UIButton *PHNoFlashButton(id self, SEL _cmd, NSString *title, SEL action) {
-    /* Replace the original back button before UIKit can display it. */
     if (PHNoFlashWantsJSON(self) && action == @selector(backTapped)) {
         title = @"JSON";
         action = @selector(ph_jsonTapped);
@@ -44,7 +44,7 @@ static void PHNoFlashHierarchy(id self, SEL _cmd) {
 
 static void PHNoFlashBack(id self, SEL _cmd) {
     PHNoFlashSetWantsJSON(self, NO);
-    objc_setAssociatedObject(self, PHJSONModeSharedKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, PHJSONModeSharedKey(), @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (PHNoFlashOriginalBack) ((void (*)(id, SEL))PHNoFlashOriginalBack)(self, _cmd);
 }
 
