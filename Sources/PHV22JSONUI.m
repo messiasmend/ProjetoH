@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import <WebKit/WebKit.h>
 #import <Foundation/Foundation.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -39,26 +40,6 @@ static UILabel *PHFindContentLabel(UIScrollView *scroll) {
     return nil;
 }
 
-static NSString *PHSelectorFromHierarchy(NSString *details) {
-    NSArray<NSString *> *lines = [details componentsSeparatedByString:@"\n"];
-    for (NSString *raw in lines) {
-        NSString *line = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        while (line.length) {
-            NSString *first = [line substringToIndex:1];
-            if ([first isEqualToString:@"▶"] || [first isEqualToString:@"↳"] || [first isEqualToString:@"├"] || [first isEqualToString:@"└"] || [first isEqualToString:@"│"] || [first isEqualToString:@"─"] || [first isEqualToString:@"→"]) {
-                line = [[line substringFromIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-            } else {
-                break;
-            }
-        }
-        if (!line.length) continue;
-        if ([line isEqualToString:@"Hierarquia DOM"]) continue;
-        if ([line hasPrefix:@"Classe:"] || [line hasPrefix:@"Rect:"] || [line hasPrefix:@"Tag:"] || [line hasPrefix:@"Hidden:"] || [line hasPrefix:@"Alpha:"]) continue;
-        return line;
-    }
-    return @"";
-}
-
 static NSString *PHJSONString(NSString *value) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:@[value ?: @""] options:0 error:nil];
     NSString *array = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
@@ -68,6 +49,24 @@ static NSString *PHJSONString(NSString *value) {
 
 static NSString *PHBuildFilterJSON(NSString *selector) {
     return [NSString stringWithFormat:@"{\n  \"action\": {\n    \"selector\": %@,\n    \"type\": \"css-display-none\"\n  },\n  \"trigger\": {\n    \"url-filter\": \".*\"\n  }\n}", PHJSONString(selector ?: @"")];
+}
+
+static NSString *PHSelectedElementSelectorJS(void) {
+    return @"(function(){var e=document.querySelector('[data-projetoh-selected=\\\"1\\\"]');if(!e)return '';function esc(s){try{return CSS.escape(s)}catch(_){return s.replace(/[^a-zA-Z0-9_-]/g,'\\\\$&')}}function unique(sel){try{return document.querySelectorAll(sel).length===1}catch(_){return false}}function classCandidates(n){if(!n||typeof n.className!=='string')return [];var a=n.className.trim().split(/\\s+/).filter(Boolean);var preferred=a.filter(function(c){return c==='q-page-sticky'||c.indexOf('page-sticky')>=0||c.indexOf('floating')>=0||c.indexOf('component')>=0||c.indexOf('overlay')>=0||c.indexOf('panel')>=0;});var normal=a.filter(function(c){return ['row','col','flex','flex-center','justify-center','items-center','no-wrap','q-focus-helper','q-icon','q-btn','q-btn__content','q-btn-item','non-selectable','notranslate','material-icons','mobile','platform-ios','touch'].indexOf(c)<0;});return preferred.concat(normal.filter(function(c){return preferred.indexOf(c)<0;}));}function findStable(start){var n=start;while(n&&n.nodeType===1&&n!==document.body){if(n!==start&&n.id){var id='[id=\\\"'+esc(n.id)+'\\\"]';if(unique(id))return id;}var cs=classCandidates(n);for(var i=0;i<cs.length;i++){var s='.'+esc(cs[i]);if(unique(s))return s;}n=n.parentElement;}if(start.id){var sid='[id=\\\"'+esc(start.id)+'\\\"]';if(unique(sid))return sid;}var own=classCandidates(start);for(var j=0;j<own.length;j++){var os='.'+esc(own[j]);if(unique(os))return os;}return '';}return findStable(e);})()";
+}
+
+static void PHSetJSONContent(id self, NSString *selector) {
+    NSString *json = PHBuildFilterJSON(selector);
+    objc_setAssociatedObject(self, PHJSONTextKey, json, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    UIView *view = [self valueForKey:@"view"];
+    UIView *panel = view.subviews.firstObject;
+    if (!panel) return;
+    UIScrollView *scroll = (UIScrollView *)PHFindSubviewOfClass(panel, UIScrollView.class);
+    UILabel *content = PHFindContentLabel(scroll);
+    if (content) {
+        content.text = json;
+        content.font = [UIFont monospacedSystemFontOfSize:12.5 weight:UIFontWeightRegular];
+    }
 }
 
 static void PHConfigureHierarchyButton(id self) {
@@ -83,7 +82,6 @@ static void PHConfigureJSONScreen(id self) {
     UIView *view = [self valueForKey:@"view"];
     UIView *panel = view.subviews.firstObject;
     if (!panel) return;
-    UIScrollView *scroll = (UIScrollView *)PHFindSubviewOfClass(panel, UIScrollView.class);
     UILabel *subtitle = nil;
     for (UIView *sub in panel.subviews) {
         if ([sub isKindOfClass:UILabel.class] && [((UILabel *)sub).text isEqualToString:@"Elemento Web selecionado"]) {
@@ -92,15 +90,40 @@ static void PHConfigureJSONScreen(id self) {
         }
     }
     if (subtitle) subtitle.text = @"Filtro JSON";
-    NSString *details = [self valueForKey:@"currentDetails"];
-    NSString *selector = PHSelectorFromHierarchy(details);
-    if (!selector.length) selector = PHSelectorFromHierarchy([self valueForKey:@"detailsBeforeHierarchy"]);
-    NSString *json = PHBuildFilterJSON(selector);
-    UILabel *content = PHFindContentLabel(scroll);
-    if (content) {
-        content.text = json;
-        content.font = [UIFont monospacedSystemFontOfSize:12.5 weight:UIFontWeightRegular];
+
+    objc_setAssociatedObject(self, PHJSONTextKey, @"", OBJC_ASSOCIATION_COPY_NONATOMIC);
+    WKWebView *webView = nil;
+    @try { webView = [self valueForKey:@"highlightedWebView"]; } @catch (__unused NSException *exception) {}
+    if (![webView isKindOfClass:WKWebView.class]) {
+        @try { webView = PHFindSubviewOfClass([self valueForKey:@"view"], WKWebView.class); } @catch (__unused NSException *exception) {}
     }
+    if (![webView isKindOfClass:WKWebView.class]) return;
+
+    [webView evaluateJavaScript:PHSelectedElementSelectorJS() completionHandler:^(id result, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *selector = (!error && [result isKindOfClass:NSString.class]) ? (NSString *)result : @"";
+            if (!selector.length) {
+                NSString *details = nil;
+                @try { details = [self valueForKey:@"currentDetails"]; } @catch (__unused NSException *exception) {}
+                if (!details.length) {
+                    @try { details = [self valueForKey:@"detailsBeforeHierarchy"]; } @catch (__unused NSException *exception) {}
+                }
+                if (details.length && ![details isEqualToString:@"Árvore DOM (elemento → ancestrais)"]) {
+                    // Fallback is intentionally limited; never use the hierarchy title as a selector.
+                    NSArray<NSString *> *lines = [details componentsSeparatedByString:@"\n"];
+                    for (NSString *line in lines) {
+                        NSString *candidate = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                        if ([candidate hasPrefix:@"div."] || [candidate hasPrefix:@"span."] || [candidate hasPrefix:@"button."] || [candidate hasPrefix:@"a."] || [candidate hasPrefix:@"#"] || [candidate hasPrefix:@"."]) {
+                            selector = candidate;
+                            break;
+                        }
+                    }
+                }
+            }
+            PHSetJSONContent(self, selector);
+        });
+    }];
+
     UIButton *left = PHFindButton(panel, @"Hierarquia");
     if (!left) left = PHFindButton(panel, @"Voltar");
     if (left) {
@@ -108,7 +131,6 @@ static void PHConfigureJSONScreen(id self) {
         [left removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
         [left addTarget:self action:@selector(backTapped) forControlEvents:UIControlEventTouchUpInside];
     }
-    objc_setAssociatedObject(self, PHJSONTextKey, json, OBJC_ASSOCIATION_COPY_NONATOMIC);
 }
 
 @interface PHV22JSONBridge : NSObject
