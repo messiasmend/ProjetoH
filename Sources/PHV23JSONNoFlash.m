@@ -1,8 +1,7 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
-
-@class PHInspectorViewController;
 
 static const void *PHNoFlashWantsJSONKey = &PHNoFlashWantsJSONKey;
 static IMP PHNoFlashOriginalButton = NULL;
@@ -19,9 +18,8 @@ static void PHNoFlashSetWantsJSON(id obj, BOOL value) {
 }
 
 static UIButton *PHNoFlashButton(id self, SEL _cmd, NSString *title, SEL action) {
-    // The original render: method creates its left button before the later
-    // JSON UI hook gets a chance to rename it. That creates a visible
-    // Voltar -> JSON flash. Intercept the button at creation time instead.
+    /* While hierarchy is being rendered, replace the original left/back
+       button before UIKit can display it. This removes the Voltar flash. */
     if (PHNoFlashWantsJSON(self) && action == @selector(backTapped)) {
         title = @"JSON";
         action = @selector(ph_jsonTapped);
@@ -33,8 +31,6 @@ static UIButton *PHNoFlashButton(id self, SEL _cmd, NSString *title, SEL action)
 }
 
 static void PHNoFlashHierarchy(id self, SEL _cmd) {
-    // Set this BEFORE the original hierarchyTapped reaches showHierarchy ->
-    // render:YES. Therefore render: creates JSON directly on its first pass.
     PHNoFlashSetWantsJSON(self, YES);
     if (PHNoFlashOriginalHierarchy) {
         ((void (*)(id, SEL))PHNoFlashOriginalHierarchy)(self, _cmd);
@@ -49,7 +45,11 @@ static void PHNoFlashBack(id self, SEL _cmd) {
 }
 
 static void PHNoFlashDetails(id self, SEL _cmd, NSString *details, NSString *subtitle) {
-    PHNoFlashSetWantsJSON(self, NO);
+    /* Do not clear WantsJSON during the internal details call used by the
+       JSON transition. The JSON UI hook owns the separate JSON state. */
+    if (!objc_getAssociatedObject(self, NSSelectorFromString(@"ph_jsonTapped"))) {
+        /* no-op: marker intentionally not used as state */
+    }
     if (PHNoFlashOriginalDetails) {
         ((void (*)(id, SEL, NSString *, NSString *))PHNoFlashOriginalDetails)(self, _cmd, details, subtitle);
     }
