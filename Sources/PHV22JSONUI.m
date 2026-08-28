@@ -68,10 +68,16 @@ static void PHConfigureJSONScreen(id self) {
 }
 static void PHRenderHook(id self, SEL _cmd, BOOL hierarchyMode) {
     if (PHOriginalRender) ((void (*)(id, SEL, BOOL))PHOriginalRender)(self,_cmd, hierarchyMode);
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (PHIsJSONMode(self)) PHConfigureJSONScreen(self);
-        else if (hierarchyMode) PHConfigureHierarchyButton(self);
-    });
+    // Configure the final button state synchronously. The original renderer
+    // creates "Voltar" for hierarchyMode; doing this on the next main-queue
+    // turn caused the visible one-frame "Voltar" flash before "JSON".
+    // render: already runs on the main thread, so update the newly-created
+    // controls before UIKit gets a chance to present the frame.
+    if (PHIsJSONMode(self)) {
+        PHConfigureJSONScreen(self);
+    } else if (hierarchyMode) {
+        PHConfigureHierarchyButton(self);
+    }
 }
 static void PHCopyHook(id self, SEL _cmd) {
     if (PHIsJSONMode(self)) { UIPasteboard.generalPasteboard.string=objc_getAssociatedObject(self,PHJSONTextKey) ?: @""; return; }
