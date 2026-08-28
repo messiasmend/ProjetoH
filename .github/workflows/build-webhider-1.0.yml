@@ -2,7 +2,7 @@ name: Build WebHider 1.0
 
 on:
   push:
-    branches: [webhider-1.0]
+    branches: [webhider-1.0, webhider-1.0-json]
   pull_request:
     branches: [webhider-1.0]
   workflow_dispatch:
@@ -30,6 +30,7 @@ jobs:
           set -euo pipefail
           test -f Sources/PHV21FilterFormatFix.m
           test -f Sources/PHV21HiddenNamesFix.m
+          test -f Sources/PHV22JSONUI.m
           echo 'WebHider 1.0 source validation passed.'
 
       - name: Apply WebHider branding
