@@ -67,7 +67,6 @@ static void PHConfigureJSONScreen(id self) {
     if (left) { [left setTitle:@"Voltar" forState:UIControlStateNormal]; [left removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside]; [left addTarget:self action:@selector(backTapped) forControlEvents:UIControlEventTouchUpInside]; }
 }
 static void PHRenderHook(id self, SEL _cmd, BOOL hierarchyMode) {
-    BOOL jsonMode=PHIsJSONMode(self);
     if (PHOriginalRender) ((void (*)(id, SEL, BOOL))PHOriginalRender)(self,_cmd, hierarchyMode);
     dispatch_async(dispatch_get_main_queue(), ^{
         if (PHIsJSONMode(self)) PHConfigureJSONScreen(self);
