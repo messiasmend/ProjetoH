@@ -3,11 +3,10 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 
-/* Shared runtime key: both JSON modules use the same class object as the
-   associated-object key. This avoids cross-file static-key mismatches and
-   does not rely on casting an Objective-C selector expression. */
+/* Shared runtime key. A SEL is already a pointer type, so it can be used
+   directly as the associated-object key without an invalid cast. */
 static const void *PHJSONModeSharedKey(void) {
-    return (const void *)NSClassFromString(@"PHInspectorViewController");
+    return @selector(ph_jsonTapped);
 }
 static const void *PHNoFlashWantsJSONKey = &PHNoFlashWantsJSONKey;
 static IMP PHNoFlashOriginalButton = NULL;
