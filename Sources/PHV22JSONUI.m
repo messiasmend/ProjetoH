@@ -157,6 +157,9 @@ static void PHConfigureJSONScreen(id self) {
     class_addMethod(target, @selector(ph_render_json:), method_getImplementation(bridgeRender), method_getTypeEncoding(bridgeRender));
     method_exchangeImplementations(render, class_getInstanceMethod(target, @selector(ph_render_json:)));
 
+    Method jsonTap = class_getInstanceMethod(bridge, @selector(ph_jsonTapped));
+    class_addMethod(target, @selector(ph_jsonTapped), method_getImplementation(jsonTap), method_getTypeEncoding(jsonTap));
+
     Method copy = class_getInstanceMethod(target, @selector(copyTapped));
     Method bridgeCopy = class_getInstanceMethod(bridge, @selector(ph_copyTapped));
     class_addMethod(target, @selector(ph_copyTapped), method_getImplementation(bridgeCopy), method_getTypeEncoding(bridgeCopy));
