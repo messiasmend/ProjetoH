@@ -10,7 +10,8 @@ WebHider_FILES = Tweak.xm \
     Sources/PHOverlayManager.m \
     Sources/PHV17ButtonOrderFix.m \
     Sources/PHV21FilterFormatFix.m \
-    Sources/PHV21HiddenNamesFix.m
+    Sources/PHV21HiddenNamesFix.m \
+    Sources/PHV22JSONUI.m
 
 WebHider_CFLAGS = -fobjc-arc
 WebHider_FRAMEWORKS = UIKit Foundation WebKit
