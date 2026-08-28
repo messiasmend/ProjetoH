@@ -95,7 +95,7 @@ static void PHConfigureJSONScreen(id self) {
     WKWebView *webView = nil;
     @try { webView = [self valueForKey:@"highlightedWebView"]; } @catch (__unused NSException *exception) {}
     if (![webView isKindOfClass:WKWebView.class]) {
-        @try { webView = PHFindSubviewOfClass([self valueForKey:@"view"], WKWebView.class); } @catch (__unused NSException *exception) {}
+        @try { webView = (WKWebView *)PHFindSubviewOfClass([self valueForKey:@"view"], WKWebView.class); } @catch (__unused NSException *exception) {}
     }
     if (![webView isKindOfClass:WKWebView.class]) return;
 
@@ -109,7 +109,6 @@ static void PHConfigureJSONScreen(id self) {
                     @try { details = [self valueForKey:@"detailsBeforeHierarchy"]; } @catch (__unused NSException *exception) {}
                 }
                 if (details.length && ![details isEqualToString:@"Árvore DOM (elemento → ancestrais)"]) {
-                    // Fallback is intentionally limited; never use the hierarchy title as a selector.
                     NSArray<NSString *> *lines = [details componentsSeparatedByString:@"\n"];
                     for (NSString *line in lines) {
                         NSString *candidate = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
