@@ -4,17 +4,18 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 
-/* Shared selector key: PHV23JSONNoFlash.m uses the same key so the
-   button-created-at-render-time hook and the JSON UI hook see one state. */
-static const void *PHJSONModeKey = (const void *)@selector(ph_jsonModeMarker);
+/* Same runtime key used by PHV23JSONNoFlash.m. */
+static const void *PHJSONModeSharedKey(void) {
+    return (const void *)NSClassFromString(@"PHInspectorViewController");
+}
 static const void *PHJSONTextKey = &PHJSONTextKey;
 static IMP PHOriginalRender = NULL;
 static IMP PHOriginalCopy = NULL;
 static IMP PHOriginalBack = NULL;
 static IMP PHOriginalDetails = NULL;
 
-static BOOL PHIsJSONMode(id obj) { return [objc_getAssociatedObject(obj, PHJSONModeKey) boolValue]; }
-static void PHSetJSONMode(id obj, BOOL value) { objc_setAssociatedObject(obj, PHJSONModeKey, @(value), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static BOOL PHIsJSONMode(id obj) { return [objc_getAssociatedObject(obj, PHJSONModeSharedKey()) boolValue]; }
+static void PHSetJSONMode(id obj, BOOL value) { objc_setAssociatedObject(obj, PHJSONModeSharedKey(), @(value), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
 
 static UIView *PHFindSubviewOfClass(UIView *root, Class cls) {
     if (!root) return nil;
