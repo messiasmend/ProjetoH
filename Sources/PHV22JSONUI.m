@@ -4,7 +4,9 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 
-static const void *PHJSONModeKey = &PHJSONModeKey;
+/* Shared selector key: PHV23JSONNoFlash.m uses the same key so the
+   button-created-at-render-time hook and the JSON UI hook see one state. */
+static const void *PHJSONModeKey = (const void *)@selector(ph_jsonModeMarker);
 static const void *PHJSONTextKey = &PHJSONTextKey;
 static IMP PHOriginalRender = NULL;
 static IMP PHOriginalCopy = NULL;
@@ -68,16 +70,8 @@ static void PHConfigureJSONScreen(id self) {
 }
 static void PHRenderHook(id self, SEL _cmd, BOOL hierarchyMode) {
     if (PHOriginalRender) ((void (*)(id, SEL, BOOL))PHOriginalRender)(self,_cmd, hierarchyMode);
-    // Configure the final button state synchronously. The original renderer
-    // creates "Voltar" for hierarchyMode; doing this on the next main-queue
-    // turn caused the visible one-frame "Voltar" flash before "JSON".
-    // render: already runs on the main thread, so update the newly-created
-    // controls before UIKit gets a chance to present the frame.
-    if (PHIsJSONMode(self)) {
-        PHConfigureJSONScreen(self);
-    } else if (hierarchyMode) {
-        PHConfigureHierarchyButton(self);
-    }
+    if (PHIsJSONMode(self)) PHConfigureJSONScreen(self);
+    else if (hierarchyMode) PHConfigureHierarchyButton(self);
 }
 static void PHCopyHook(id self, SEL _cmd) {
     if (PHIsJSONMode(self)) { UIPasteboard.generalPasteboard.string=objc_getAssociatedObject(self,PHJSONTextKey) ?: @""; return; }
