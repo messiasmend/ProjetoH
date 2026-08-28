@@ -119,8 +119,7 @@ static void PHConfigureJSONScreen(id self) {
     [webView evaluateJavaScript:PHSelectedElementSelectorJS() completionHandler:^(id result, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             NSString *selector = (!error && [result isKindOfClass:NSString.class]) ? (NSString *)result : @"";
-            /* Deliberately do not fall back to currentDetails/detailsBeforeHierarchy.
-             * Those strings are the hierarchy text, not the selected DOM selector. */
+            /* Do not derive the selector from hierarchy text. */
             PHSetJSONContent(self, selector);
         });
     }];
@@ -135,15 +134,22 @@ static void PHConfigureJSONScreen(id self) {
 }
 
 static void PHRenderHook(id self, SEL _cmd, BOOL hierarchyMode) {
-    if (PHOriginalRender) {
-        BOOL jsonMode = PHIsJSONMode(self);
-        ((void (*)(id, SEL, BOOL))PHOriginalRender)(self, _cmd, jsonMode ? NO : hierarchyMode);
+    BOOL jsonMode = PHIsJSONMode(self);
 
-        if (jsonMode) {
-            PHConfigureJSONScreen(self);
-        } else if (hierarchyMode) {
-            PHConfigureHierarchyButton(self);
-        }
+    if (PHOriginalRender) {
+        ((void (*)(id, SEL, BOOL))PHOriginalRender)(self, _cmd, jsonMode ? NO : hierarchyMode);
+    }
+
+    /* The app's render path can call showInspectorDetails:subtitle: while
+     * switching screens. JSON mode must survive that internal call. */
+    if (jsonMode) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (PHIsJSONMode(self)) PHConfigureJSONScreen(self);
+        });
+    } else if (hierarchyMode) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!PHIsJSONMode(self)) PHConfigureHierarchyButton(self);
+        });
     }
 }
 
@@ -162,7 +168,11 @@ static void PHBackHook(id self, SEL _cmd) {
 }
 
 static void PHDetailsHook(id self, SEL _cmd, NSString *details, NSString *subtitle) {
-    PHSetJSONMode(self, NO);
+    /* A render performed for JSON can internally call this method. Do not
+     * destroy JSON mode during that transition. */
+    if (!PHIsJSONMode(self)) {
+        PHSetJSONMode(self, NO);
+    }
     if (PHOriginalDetails) ((void (*)(id, SEL, NSString *, NSString *))PHOriginalDetails)(self, _cmd, details, subtitle);
 }
 
