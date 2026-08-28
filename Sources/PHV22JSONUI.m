@@ -7,6 +7,11 @@
 static const void *PHJSONModeKey = &PHJSONModeKey;
 static const void *PHJSONTextKey = &PHJSONTextKey;
 
+static IMP PHOriginalRender = NULL;
+static IMP PHOriginalCopy = NULL;
+static IMP PHOriginalBack = NULL;
+static IMP PHOriginalDetails = NULL;
+
 static BOOL PHIsJSONMode(id obj) {
     return [objc_getAssociatedObject(obj, PHJSONModeKey) boolValue];
 }
@@ -16,6 +21,7 @@ static void PHSetJSONMode(id obj, BOOL value) {
 }
 
 static UIView *PHFindSubviewOfClass(UIView *root, Class cls) {
+    if (!root) return nil;
     if ([root isKindOfClass:cls]) return root;
     for (UIView *sub in root.subviews) {
         UIView *found = PHFindSubviewOfClass(sub, cls);
@@ -25,6 +31,7 @@ static UIView *PHFindSubviewOfClass(UIView *root, Class cls) {
 }
 
 static UIButton *PHFindButton(UIView *root, NSString *title) {
+    if (!root) return nil;
     if ([root isKindOfClass:UIButton.class] && [[((UIButton *)root) titleForState:UIControlStateNormal] isEqualToString:title]) return (UIButton *)root;
     for (UIView *sub in root.subviews) {
         UIButton *found = PHFindButton(sub, title);
@@ -34,6 +41,7 @@ static UIButton *PHFindButton(UIView *root, NSString *title) {
 }
 
 static UILabel *PHFindContentLabel(UIScrollView *scroll) {
+    if (!scroll) return nil;
     for (UIView *sub in scroll.subviews) {
         if ([sub isKindOfClass:UILabel.class]) return (UILabel *)sub;
     }
@@ -56,11 +64,13 @@ static NSString *PHSelectedElementSelectorJS(void) {
 }
 
 static void PHSetJSONContent(id self, NSString *selector) {
-    NSString *json = PHBuildFilterJSON(selector);
+    NSString *json = PHBuildFilterJSON(selector ?: @"");
     objc_setAssociatedObject(self, PHJSONTextKey, json, OBJC_ASSOCIATION_COPY_NONATOMIC);
+
     UIView *view = [self valueForKey:@"view"];
     UIView *panel = view.subviews.firstObject;
     if (!panel) return;
+
     UIScrollView *scroll = (UIScrollView *)PHFindSubviewOfClass(panel, UIScrollView.class);
     UILabel *content = PHFindContentLabel(scroll);
     if (content) {
@@ -73,6 +83,7 @@ static void PHConfigureHierarchyButton(id self) {
     UIView *view = [self valueForKey:@"view"];
     UIButton *button = PHFindButton(view, @"Voltar");
     if (!button) return;
+
     [button setTitle:@"JSON" forState:UIControlStateNormal];
     [button removeTarget:nil action:NULL forControlEvents:UIControlEventTouchUpInside];
     [button addTarget:self action:@selector(ph_jsonTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -82,6 +93,7 @@ static void PHConfigureJSONScreen(id self) {
     UIView *view = [self valueForKey:@"view"];
     UIView *panel = view.subviews.firstObject;
     if (!panel) return;
+
     UILabel *subtitle = nil;
     for (UIView *sub in panel.subviews) {
         if ([sub isKindOfClass:UILabel.class] && [((UILabel *)sub).text isEqualToString:@"Elemento Web selecionado"]) {
@@ -92,33 +104,23 @@ static void PHConfigureJSONScreen(id self) {
     if (subtitle) subtitle.text = @"Filtro JSON";
 
     objc_setAssociatedObject(self, PHJSONTextKey, @"", OBJC_ASSOCIATION_COPY_NONATOMIC);
+
     WKWebView *webView = nil;
     @try { webView = [self valueForKey:@"highlightedWebView"]; } @catch (__unused NSException *exception) {}
     if (![webView isKindOfClass:WKWebView.class]) {
         @try { webView = (WKWebView *)PHFindSubviewOfClass([self valueForKey:@"view"], WKWebView.class); } @catch (__unused NSException *exception) {}
     }
-    if (![webView isKindOfClass:WKWebView.class]) return;
+
+    if (![webView isKindOfClass:WKWebView.class]) {
+        PHSetJSONContent(self, @"");
+        return;
+    }
 
     [webView evaluateJavaScript:PHSelectedElementSelectorJS() completionHandler:^(id result, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             NSString *selector = (!error && [result isKindOfClass:NSString.class]) ? (NSString *)result : @"";
-            if (!selector.length) {
-                NSString *details = nil;
-                @try { details = [self valueForKey:@"currentDetails"]; } @catch (__unused NSException *exception) {}
-                if (!details.length) {
-                    @try { details = [self valueForKey:@"detailsBeforeHierarchy"]; } @catch (__unused NSException *exception) {}
-                }
-                if (details.length && ![details isEqualToString:@"Árvore DOM (elemento → ancestrais)"]) {
-                    NSArray<NSString *> *lines = [details componentsSeparatedByString:@"\n"];
-                    for (NSString *line in lines) {
-                        NSString *candidate = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                        if ([candidate hasPrefix:@"div."] || [candidate hasPrefix:@"span."] || [candidate hasPrefix:@"button."] || [candidate hasPrefix:@"a."] || [candidate hasPrefix:@"#"] || [candidate hasPrefix:@"."]) {
-                            selector = candidate;
-                            break;
-                        }
-                    }
-                }
-            }
+            /* Deliberately do not fall back to currentDetails/detailsBeforeHierarchy.
+             * Those strings are the hierarchy text, not the selected DOM selector. */
             PHSetJSONContent(self, selector);
         });
     }];
@@ -132,68 +134,79 @@ static void PHConfigureJSONScreen(id self) {
     }
 }
 
+static void PHRenderHook(id self, SEL _cmd, BOOL hierarchyMode) {
+    if (PHOriginalRender) {
+        BOOL jsonMode = PHIsJSONMode(self);
+        ((void (*)(id, SEL, BOOL))PHOriginalRender)(self, _cmd, jsonMode ? NO : hierarchyMode);
+
+        if (jsonMode) {
+            PHConfigureJSONScreen(self);
+        } else if (hierarchyMode) {
+            PHConfigureHierarchyButton(self);
+        }
+    }
+}
+
+static void PHCopyHook(id self, SEL _cmd) {
+    if (PHIsJSONMode(self)) {
+        NSString *json = objc_getAssociatedObject(self, PHJSONTextKey);
+        UIPasteboard.generalPasteboard.string = json ?: @"";
+        return;
+    }
+    if (PHOriginalCopy) ((void (*)(id, SEL))PHOriginalCopy)(self, _cmd);
+}
+
+static void PHBackHook(id self, SEL _cmd) {
+    if (PHIsJSONMode(self)) PHSetJSONMode(self, NO);
+    if (PHOriginalBack) ((void (*)(id, SEL))PHOriginalBack)(self, _cmd);
+}
+
+static void PHDetailsHook(id self, SEL _cmd, NSString *details, NSString *subtitle) {
+    PHSetJSONMode(self, NO);
+    if (PHOriginalDetails) ((void (*)(id, SEL, NSString *, NSString *))PHOriginalDetails)(self, _cmd, details, subtitle);
+}
+
 @interface PHV22JSONBridge : NSObject
 @end
 
 @implementation PHV22JSONBridge
-
-- (void)ph_render_json:(BOOL)hierarchyMode {
-    BOOL jsonMode = PHIsJSONMode(self);
-    ((void (*)(id, SEL, BOOL))objc_msgSend)(self, @selector(ph_render_json:), jsonMode ? NO : hierarchyMode);
-    if (jsonMode) PHConfigureJSONScreen(self);
-    else if (hierarchyMode) PHConfigureHierarchyButton(self);
-}
 
 - (void)ph_jsonTapped {
     PHSetJSONMode(self, YES);
     ((void (*)(id, SEL, BOOL))objc_msgSend)(self, @selector(render:), NO);
 }
 
-- (void)ph_copyTapped {
-    if (PHIsJSONMode(self)) {
-        NSString *json = objc_getAssociatedObject(self, PHJSONTextKey);
-        UIPasteboard.generalPasteboard.string = json ?: @"";
-        return;
-    }
-    ((void (*)(id, SEL))objc_msgSend)(self, @selector(ph_copyTapped));
-}
-
-- (void)ph_backTapped {
-    if (PHIsJSONMode(self)) PHSetJSONMode(self, NO);
-    ((void (*)(id, SEL))objc_msgSend)(self, @selector(ph_backTapped));
-}
-
-- (void)ph_showInspectorDetails:(NSString *)details subtitle:(NSString *)subtitle {
-    PHSetJSONMode(self, NO);
-    ((void (*)(id, SEL, NSString *, NSString *))objc_msgSend)(self, @selector(ph_showInspectorDetails:subtitle:), details, subtitle);
-}
-
 + (void)load {
     Class target = NSClassFromString(@"PHInspectorViewController");
     if (!target) return;
-    Class bridge = self;
 
     Method render = class_getInstanceMethod(target, @selector(render:));
-    Method bridgeRender = class_getInstanceMethod(bridge, @selector(ph_render_json:));
-    class_addMethod(target, @selector(ph_render_json:), method_getImplementation(bridgeRender), method_getTypeEncoding(bridgeRender));
-    method_exchangeImplementations(render, class_getInstanceMethod(target, @selector(ph_render_json:)));
-
-    Method jsonTap = class_getInstanceMethod(bridge, @selector(ph_jsonTapped));
-    class_addMethod(target, @selector(ph_jsonTapped), method_getImplementation(jsonTap), method_getTypeEncoding(jsonTap));
+    if (render) {
+        PHOriginalRender = method_getImplementation(render);
+        method_setImplementation(render, (IMP)PHRenderHook);
+    }
 
     Method copy = class_getInstanceMethod(target, @selector(copyTapped));
-    Method bridgeCopy = class_getInstanceMethod(bridge, @selector(ph_copyTapped));
-    class_addMethod(target, @selector(ph_copyTapped), method_getImplementation(bridgeCopy), method_getTypeEncoding(bridgeCopy));
-    method_exchangeImplementations(copy, class_getInstanceMethod(target, @selector(ph_copyTapped)));
+    if (copy) {
+        PHOriginalCopy = method_getImplementation(copy);
+        method_setImplementation(copy, (IMP)PHCopyHook);
+    }
 
     Method back = class_getInstanceMethod(target, @selector(backTapped));
-    Method bridgeBack = class_getInstanceMethod(bridge, @selector(ph_backTapped));
-    class_addMethod(target, @selector(ph_backTapped), method_getImplementation(bridgeBack), method_getTypeEncoding(bridgeBack));
-    method_exchangeImplementations(back, class_getInstanceMethod(target, @selector(ph_backTapped)));
+    if (back) {
+        PHOriginalBack = method_getImplementation(back);
+        method_setImplementation(back, (IMP)PHBackHook);
+    }
 
     Method details = class_getInstanceMethod(target, @selector(showInspectorDetails:subtitle:));
-    Method bridgeDetails = class_getInstanceMethod(bridge, @selector(ph_showInspectorDetails:subtitle:));
-    class_addMethod(target, @selector(ph_showInspectorDetails:subtitle:), method_getImplementation(bridgeDetails), method_getTypeEncoding(bridgeDetails));
-    method_exchangeImplementations(details, class_getInstanceMethod(target, @selector(ph_showInspectorDetails:subtitle:)));
+    if (details) {
+        PHOriginalDetails = method_getImplementation(details);
+        method_setImplementation(details, (IMP)PHDetailsHook);
+    }
+
+    Method jsonTap = class_getInstanceMethod(self, @selector(ph_jsonTapped));
+    if (jsonTap) {
+        class_addMethod(target, @selector(ph_jsonTapped), method_getImplementation(jsonTap), method_getTypeEncoding(jsonTap));
+    }
 }
 @end
