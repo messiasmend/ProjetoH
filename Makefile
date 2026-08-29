@@ -11,7 +11,8 @@ WebHider_FILES = Tweak.xm \
     Sources/PHV17ButtonOrderFix.m \
     Sources/PHV21FilterFormatFix.m \
     Sources/PHV21HiddenNamesFix.m \
-    Sources/PHV26JSONFlowFinal.m
+    Sources/PHV26JSONFlowFinal.m \
+    Sources/PHV27HeaderFix.m
 
 WebHider_CFLAGS = -fobjc-arc
 WebHider_FRAMEWORKS = UIKit Foundation WebKit
