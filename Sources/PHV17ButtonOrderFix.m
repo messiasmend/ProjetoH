@@ -26,8 +26,6 @@ static void PHV17Reorder(UIViewController *controller) {
     UIButton *salvar = PHV17FindButton(root, @"Salvar");
     if (!ocultar || !ocultos || !salvar) return;
 
-    // Physical order is controlled by Auto Layout. Keep titles, targets and
-    // actions untouched; replace only the horizontal placement constraints.
     UIView *panel = ocultar.superview;
     if (panel != ocultos.superview || panel != salvar.superview) return;
 
@@ -53,6 +51,9 @@ static void PHV17Reorder(UIViewController *controller) {
         [salvar.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-18]
     ]];
 
+    /* Apply the final geometry before the current run-loop can present the
+       newly rendered panel. The old implementation performed two deferred
+       passes, which exposed an intermediate position as a visible tremor. */
     [panel setNeedsLayout];
     [panel layoutIfNeeded];
 }
@@ -62,12 +63,9 @@ static void PHV17Render(id self, SEL _cmd, BOOL hierarchyMode) {
         ((void (*)(id, SEL, BOOL))PHV17OriginalRender)(self, _cmd, hierarchyMode);
     }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-        PHV17Reorder((UIViewController *)self);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            PHV17Reorder((UIViewController *)self);
-        });
-    });
+    /* Do not defer the reorder. render: has just rebuilt the panel, so applying
+       the final constraints synchronously prevents an intermediate frame. */
+    PHV17Reorder((UIViewController *)self);
 }
 
 __attribute__((constructor))
