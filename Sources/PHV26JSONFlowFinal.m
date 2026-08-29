@@ -3,6 +3,7 @@
 #import <Foundation/Foundation.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
+#import "PHOverlayManager.h"
 
 /* WebHider 2.1
    Only owns the Hierarquia -> JSON -> Voltar state machine.
@@ -94,23 +95,11 @@ static void PH26SetJSONText(id self, NSString *selector) {
 static void PH26RenderJSON(id self) {
     PH26SetWantsJSON(self, YES);
     PH26SetJSONScreen(self, YES);
-    UIViewController *vc = (UIViewController *)self;
-    @try {
-        [vc performSelector:@selector(render:) withObject:@YES];
-    } @catch (__unused NSException *e) {}
-    for (UIView *v in vc.view.subviews) {
-        for (UIView *sub in v.subviews) {
-            if ([sub isKindOfClass:UILabel.class] && [((UILabel *)sub).text isEqualToString:@"Hierarquia DOM"]) {
-                ((UILabel *)sub).text = @"Filtro JSON";
-            }
-        }
-    }
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(self, @selector(render:), YES);
 }
 
 static void PH26JSONTapped(id self, SEL _cmd) {
-    PHOverlayManager *manager = nil;
-    @try { manager = [PHOverlayManager sharedManager]; } @catch (__unused NSException *e) {}
-
+    PHOverlayManager *manager = [PHOverlayManager sharedManager];
     WKWebView *webView = nil;
     @try { webView = [manager valueForKey:@"highlightedWebView"]; } @catch (__unused NSException *e) {}
 
@@ -138,8 +127,8 @@ static void PH26JSONTapped(id self, SEL _cmd) {
 }
 
 static UIButton *PH26Button(id self, SEL _cmd, NSString *title, SEL action) {
-    /* Keep the original lower-row button creation untouched. Only the
-       left navigation button is remapped according to the current state. */
+    /* Only the left navigation button is remapped according to state.
+       Copiar, Fechar, Ocultar, Ocultos and Salvar are left untouched. */
     if (action == @selector(backTapped) && PH26WantsJSON(self) && !PH26JSONScreen(self)) {
         title = @"JSON";
         action = @selector(ph_jsonTapped26);
