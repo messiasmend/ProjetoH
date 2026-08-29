@@ -4,12 +4,11 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 
-/* WebHider 2.0
-   Single owner for the Hierarquia -> JSON flow.
-   The important part is that the button is changed while it is being
-   created, not after render, which removes the one-frame "Voltar" flash. */
-
+/* WebHider 2.0: single owner for Hierarquia -> JSON -> Voltar.
+   The hierarchy button is changed during button creation, so the original
+   "Voltar" button is never rendered and there is no visual flash. */
 static const void *PH26WantsJSONKey = &PH26WantsJSONKey;
+static const void *PH26JSONScreenKey = &PH26JSONScreenKey;
 static const void *PH26JSONTextKey = &PH26JSONTextKey;
 static IMP PH26OriginalButton = NULL;
 static IMP PH26OriginalHierarchy = NULL;
@@ -17,13 +16,10 @@ static IMP PH26OriginalRender = NULL;
 static IMP PH26OriginalBack = NULL;
 static IMP PH26OriginalDetails = NULL;
 
-static BOOL PH26WantsJSON(id obj) {
-    return [objc_getAssociatedObject(obj, PH26WantsJSONKey) boolValue];
-}
-
-static void PH26SetWantsJSON(id obj, BOOL value) {
-    objc_setAssociatedObject(obj, PH26WantsJSONKey, @(value), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
+static BOOL PH26WantsJSON(id obj) { return [objc_getAssociatedObject(obj, PH26WantsJSONKey) boolValue]; }
+static void PH26SetWantsJSON(id obj, BOOL value) { objc_setAssociatedObject(obj, PH26WantsJSONKey, @(value), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static BOOL PH26JSONScreen(id obj) { return [objc_getAssociatedObject(obj, PH26JSONScreenKey) boolValue]; }
+static void PH26SetJSONScreen(id obj, BOOL value) { objc_setAssociatedObject(obj, PH26JSONScreenKey, @(value), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
 
 static NSString *PH26JSONString(NSString *value) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:@[value ?: @""] options:0 error:nil];
@@ -45,61 +41,54 @@ static void PH26SetJSONText(id self, NSString *selector) {
     @try { [self setValue:json forKey:@"currentDetails"]; [self setValue:@"Filtro JSON" forKey:@"currentSubtitle"]; } @catch (__unused NSException *e) {}
 }
 
-static void PH26ShowJSON(id self) {
+static void PH26RenderJSON(id self) {
     PH26SetWantsJSON(self, YES);
-    UIViewController *vc = (UIViewController *)self;
+    PH26SetJSONScreen(self, YES);
+    if (PH26OriginalRender) ((void (*)(id, SEL, BOOL))PH26OriginalRender)(self, @selector(render:), YES);
+    UIView *root = ((UIViewController *)self).view;
+    for (UIView *v in root.subviews) for (UIView *sub in v.subviews)
+        if ([sub isKindOfClass:UILabel.class] && [((UILabel *)sub).text isEqualToString:@"Hierarquia DOM"])
+            ((UILabel *)sub).text = @"Filtro JSON";
+}
+
+static void PH26JSONTapped(id self, SEL _cmd) {
     WKWebView *webView = nil;
-    @try { webView = [vc valueForKey:@"highlightedWebView"]; } @catch (__unused NSException *e) {}
+    @try { webView = [self valueForKey:@"highlightedWebView"]; } @catch (__unused NSException *e) {}
     if (![webView isKindOfClass:WKWebView.class]) {
-        UIView *root = vc.view;
+        UIView *root = ((UIViewController *)self).view;
         NSMutableArray *stack = [NSMutableArray arrayWithObject:root];
         while (stack.count && !webView) {
             UIView *v = stack.lastObject; [stack removeLastObject];
-            if ([v isKindOfClass:WKWebView.class]) { webView=(WKWebView *)v; break; }
+            if ([v isKindOfClass:WKWebView.class]) { webView = (WKWebView *)v; break; }
             [stack addObjectsFromArray:v.subviews];
         }
     }
-    if (!webView) {
-        PH26SetJSONText(self, @"");
-        if (PH26OriginalRender) ((void (*)(id, SEL, BOOL))PH26OriginalRender)(self, @selector(render:), YES);
-        return;
-    }
+    if (!webView) { PH26SetJSONText(self, @""); PH26RenderJSON(self); return; }
     [webView evaluateJavaScript:PH26SelectorJS() completionHandler:^(id result, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             NSString *selector = (!error && [result isKindOfClass:NSString.class]) ? result : @"";
             PH26SetJSONText(self, selector);
-            if (PH26OriginalRender) ((void (*)(id, SEL, BOOL))PH26OriginalRender)(self, @selector(render:), YES);
-            UIView *root = ((UIViewController *)self).view;
-            for (UIView *v in root.subviews) {
-                for (UIView *sub in v.subviews) {
-                    if ([sub isKindOfClass:UILabel.class] && [((UILabel *)sub).text isEqualToString:@"Hierarquia DOM"]) {
-                        ((UILabel *)sub).text = @"Filtro JSON";
-                    }
-                }
-            }
+            PH26RenderJSON(self);
         });
     }];
 }
 
-static void PH26JSONTapped(id self, SEL _cmd) {
-    PH26ShowJSON(self);
-}
-
 static UIButton *PH26Button(id self, SEL _cmd, NSString *title, SEL action) {
-    if (PH26WantsJSON(self) && action == @selector(backTapped)) {
+    if (PH26WantsJSON(self) && !PH26JSONScreen(self) && action == @selector(backTapped)) {
+        title = @"JSON";
+        action = @selector(ph_jsonTapped26);
+    } else if (PH26JSONScreen(self) && action == @selector(backTapped)) {
         title = @"Voltar";
         action = @selector(backTapped);
-    } else if (PH26WantsJSON(self) == NO && action == @selector(backTapped)) {
-        /* unchanged */
     }
     if (PH26OriginalButton) return ((UIButton *(*)(id, SEL, NSString *, SEL))PH26OriginalButton)(self, _cmd, title, action);
     return nil;
 }
 
 static void PH26Hierarchy(id self, SEL _cmd) {
-    PH26SetWantsJSON(self, NO);
-    if (PH26OriginalHierarchy) ((void (*)(id, SEL))PH26OriginalHierarchy)(self, _cmd);
+    PH26SetJSONScreen(self, NO);
     PH26SetWantsJSON(self, YES);
+    if (PH26OriginalHierarchy) ((void (*)(id, SEL))PH26OriginalHierarchy)(self, _cmd);
 }
 
 static void PH26Render(id self, SEL _cmd, BOOL hierarchyMode) {
@@ -107,53 +96,32 @@ static void PH26Render(id self, SEL _cmd, BOOL hierarchyMode) {
 }
 
 static void PH26Back(id self, SEL _cmd) {
+    PH26SetJSONScreen(self, NO);
     PH26SetWantsJSON(self, NO);
     if (PH26OriginalBack) ((void (*)(id, SEL))PH26OriginalBack)(self, _cmd);
 }
 
 static void PH26Details(id self, SEL _cmd, NSString *details, NSString *subtitle) {
+    PH26SetJSONScreen(self, NO);
     PH26SetWantsJSON(self, NO);
     if (PH26OriginalDetails) ((void (*)(id, SEL, NSString *, NSString *))PH26OriginalDetails)(self, _cmd, details, subtitle);
 }
 
-@interface PHV26JSONFlowFinal : NSObject
-@end
-
+@interface PHV26JSONFlowFinal : NSObject @end
 @implementation PHV26JSONFlowFinal
 + (void)load {
     Class target = NSClassFromString(@"PHInspectorViewController");
     if (!target) return;
-
     class_addMethod(target, @selector(ph_jsonTapped26), (IMP)PH26JSONTapped, "v@:");
-
     Method button = class_getInstanceMethod(target, @selector(button:action:));
-    if (button) {
-        PH26OriginalButton = method_getImplementation(button);
-        method_setImplementation(button, (IMP)PH26Button);
-    }
-
+    if (button) { PH26OriginalButton = method_getImplementation(button); method_setImplementation(button, (IMP)PH26Button); }
     Method hierarchy = class_getInstanceMethod(target, @selector(hierarchyTapped));
-    if (hierarchy) {
-        PH26OriginalHierarchy = method_getImplementation(hierarchy);
-        method_setImplementation(hierarchy, (IMP)PH26Hierarchy);
-    }
-
+    if (hierarchy) { PH26OriginalHierarchy = method_getImplementation(hierarchy); method_setImplementation(hierarchy, (IMP)PH26Hierarchy); }
     Method render = class_getInstanceMethod(target, @selector(render:));
-    if (render) {
-        PH26OriginalRender = method_getImplementation(render);
-        method_setImplementation(render, (IMP)PH26Render);
-    }
-
+    if (render) { PH26OriginalRender = method_getImplementation(render); method_setImplementation(render, (IMP)PH26Render); }
     Method back = class_getInstanceMethod(target, @selector(backTapped));
-    if (back) {
-        PH26OriginalBack = method_getImplementation(back);
-        method_setImplementation(back, (IMP)PH26Back);
-    }
-
+    if (back) { PH26OriginalBack = method_getImplementation(back); method_setImplementation(back, (IMP)PH26Back); }
     Method details = class_getInstanceMethod(target, @selector(showInspectorDetails:subtitle:));
-    if (details) {
-        PH26OriginalDetails = method_getImplementation(details);
-        method_setImplementation(details, (IMP)PH26Details);
-    }
+    if (details) { PH26OriginalDetails = method_getImplementation(details); method_setImplementation(details, (IMP)PH26Details); }
 }
 @end
